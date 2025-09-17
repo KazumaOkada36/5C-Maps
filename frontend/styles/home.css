@@ -1,0 +1,68 @@
+/* Add this to your existing CSS */
+
+.map-container-leaflet {
+    height: 500px;
+    background: white;
+    border-radius: 15px;
+    margin-bottom: 1rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    overflow: hidden;
+  }
+  
+  .poi-results {
+    max-height: 300px;
+    overflow-y: auto;
+    background: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  }
+  
+  .poi-list {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  
+  .poi-card {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-left: 4px solid #667eea;
+    transition: transform 0.2s ease;
+  }
+  
+  .poi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  }
+  
+  .poi-category {
+    padding: 0.25rem 0.5rem;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: white;
+    margin-left: 0.5rem;
+  }
+  
+  .poi-category.campus { background: #667eea; }
+  .poi-category.dining { background: #feca57; }
+  .poi-category.recreation { background: #48dbfb; }
+  .poi-category.classes { background: #4ecdc4; }
+  .poi-category.events { background: #ff6b6b; }
+  
+  .popup-content h3 {
+    margin: 0 0 0.5rem 0;
+    color: #333;
+  }
+  
+  .popup-content p {
+    margin: 0.25rem 0;
+    color: #666;
+  }
+  
+  .custom-div-icon {
+    background: transparent;
+    border: none;
+  }
