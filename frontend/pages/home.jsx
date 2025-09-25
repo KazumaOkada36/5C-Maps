@@ -1,219 +1,272 @@
 import React, { useState, useEffect, useRef } from 'react';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
 import '../styles/home.css';
+
+// Fix for default markers in Leaflet
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 const Home = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [pois, setPois] = useState([]);
+  const [colleges, setColleges] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
 
-  // Mock POI data with real 5C coordinates
-  const mockPOIs = [
-    {
-      id: 1,
-      name: "Pomona College - Bridges Auditorium",
-      category: "campus",
-      lat: 34.0969,
-      lng: -117.7073,
-      description: "Main performance venue",
-      time: "Event times vary"
-    },
-    {
-      id: 2,
-      name: "Frank Dining Hall",
-      category: "dining",
-      lat: 34.0975,
-      lng: -117.7080,
-      description: "Pomona College dining hall",
-      time: "7am-9pm"
-    },
-    {
-      id: 3,
-      name: "Rains Athletic Center", 
-      category: "recreation",
-      lat: 34.0960,
-      lng: -117.7065,
-      description: "Fitness center and pool",
-      time: "6am-11pm"
-    },
-    {
-      id: 4,
-      name: "Seaver North - Biology",
-      category: "classes",
-      lat: 34.0980,
-      lng: -117.7070,
-      description: "Science building with labs",
-      time: "8am-6pm"
-    },
-    {
-      id: 5,
-      name: "Claremont McKenna College",
-      category: "campus", 
-      lat: 34.0947,
-      lng: -117.7099,
-      description: "CMC main campus",
-      time: "Always open"
-    },
-    {
-      id: 6,
-      name: "Scripps College",
-      category: "campus",
-      lat: 34.1015,
-      lng: -117.7057,
-      description: "Scripps main campus", 
-      time: "Always open"
-    },
-    {
-      id: 7,
-      name: "Harvey Mudd College",
-      category: "campus",
-      lat: 34.1060,
-      lng: -117.7094,
-      description: "HMC main campus",
-      time: "Always open"
-    },
-    {
-      id: 8,
-      name: "Pitzer College",
-      category: "campus",
-      lat: 34.1020,
-      lng: -117.7115,
-      description: "Pitzer main campus",
-      time: "Always open"
-    },
-    {
-      id: 9,
-      name: "Collins Dining Hall",
-      category: "dining",
-      lat: 34.0950,
-      lng: -117.7095,
-      description: "CMC dining hall",
-      time: "7am-9pm"
-    },
-    {
-      id: 10,
-      name: "Keck Science Center",
-      category: "classes",
-      lat: 34.1030,
-      lng: -117.7080,
-      description: "Joint science facility",
-      time: "24/7 access with ID"
-    }
-  ];
+  // Backend API base URL
+  const API_BASE = 'http://localhost:8080/api/v1';
 
-  useEffect(() => {
-    setPois(mockPOIs);
-  }, []);
+  // Even tighter boundaries - just the core 5C campus buildings
+  const CLAREMONT_BOUNDS = {
+    north: 34.1070,  // Just above Scripps/HMC
+    south: 34.0930,  // Just below CMC/Pomona  
+    east: -117.7040, // Just east of campus buildings
+    west: -117.7140  // Just west of campus buildings
+  };
 
-  // Initialize map when component mounts
+  // Debounce search term
   useEffect(() => {
-    const initMap = async () => {
-      // Dynamically import Leaflet
-      const L = await import('leaflet');
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Fetch data from backend
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
       
-      if (mapRef.current && !mapInstanceRef.current) {
-        // Create map
-        mapInstanceRef.current = L.map(mapRef.current).setView([34.1015, -117.7080], 15);
+      try {
+        const [collegesResponse, locationsResponse] = await Promise.all([
+          fetch(`${API_BASE}/colleges`),
+          fetch(`${API_BASE}/locations`)
+        ]);
+
+        if (!collegesResponse.ok || !locationsResponse.ok) {
+          throw new Error('Failed to fetch data from backend');
+        }
+
+        const collegesData = await collegesResponse.json();
+        const locationsData = await locationsResponse.json();
+
+        setColleges(collegesData);
         
-        // Add tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors'
-        }).addTo(mapInstanceRef.current);
+        const formattedPOIs = locationsData.map(location => ({
+          id: location.id,
+          name: location.name,
+          category: location.category || 'other',
+          lat: location.latitude,
+          lng: location.longitude,
+          description: `${location.college} - ${location.category}`,
+          time: "Check college website for hours",
+          college: location.college
+        }));
+
+        setPois(formattedPOIs);
         
-        // Add markers
-        updateMapMarkers(mockPOIs, L);
+      } catch (err) {
+        console.error('Backend fetch failed:', err);
+        setError('Failed to load data from backend. Using fallback data.');
+        
+        const fallbackData = [
+          {
+            id: 1,
+            name: "Pomona College",
+            category: "campus",
+            lat: 34.0969,
+            lng: -117.7073,
+            description: "Main campus",
+            time: "Always open",
+            college: "Pomona College"
+          },
+          {
+            id: 2,
+            name: "CMC Campus", 
+            category: "campus",
+            lat: 34.0947,
+            lng: -117.7099,
+            description: "Claremont McKenna College",
+            time: "Always open",
+            college: "Claremont McKenna College"
+          }
+        ];
+        setPois(fallbackData);
+      } finally {
+        setLoading(false);
       }
     };
-    
+
+    fetchData();
+  }, []);
+
+  // Initialize highly constrained Leaflet map
+  useEffect(() => {
+    const initMap = async () => {
+      if (!mapRef.current || mapInstanceRef.current || pois.length === 0) return;
+
+      try {
+        // Define strict boundaries
+        const bounds = L.latLngBounds(
+          [CLAREMONT_BOUNDS.south, CLAREMONT_BOUNDS.west], // Southwest
+          [CLAREMONT_BOUNDS.north, CLAREMONT_BOUNDS.east]  // Northeast
+        );
+
+        // Create map with maximum performance restrictions
+        mapInstanceRef.current = L.map(mapRef.current, {
+          center: [34.1000, -117.7090], // Center on 5C campus core
+          zoom: 17,       // Even higher zoom to focus tightly on campus buildings
+          minZoom: 16,    // Higher minimum zoom - only campus buildings visible
+          maxZoom: 18,    // Allow zooming in for building details
+          maxBounds: bounds,
+          maxBoundsViscosity: 1.0, // Hard boundary enforcement
+          
+          // Performance optimizations - disable ALL animations
+          zoomAnimation: false,
+          fadeAnimation: false, 
+          markerZoomAnimation: false,
+          preferCanvas: true,
+          
+          // Controlled interactions
+          scrollWheelZoom: true,  // Allow zoom with wheel
+          doubleClickZoom: false, // Disable double-click zoom
+          boxZoom: false,         // Disable box zoom
+          keyboard: false,        // Disable keyboard navigation
+          dragging: true,         // Allow dragging but constrained by bounds
+          touchZoom: true,        // Allow pinch zoom on mobile
+          
+          // UI controls
+          zoomControl: true,
+          attributionControl: false
+        });
+
+        // Add lightweight tile layer with performance settings
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap',
+          maxZoom: 18,
+          // Performance optimizations for tiles
+          keepBuffer: 0,           // Don't keep extra tiles
+          updateWhenIdle: true,    // Only update when map stops moving
+          updateWhenZooming: false, // Don't update while zooming
+        }).addTo(mapInstanceRef.current);
+
+        // Fit map to bounds on initialization
+        mapInstanceRef.current.fitBounds(bounds, { padding: [20, 20] });
+
+        // Add initial markers
+        updateMapMarkers(pois);
+
+        console.log('Map initialized with tight 5C campus boundaries');
+
+      } catch (error) {
+        console.error('Failed to initialize map:', error);
+      }
+    };
+
     initMap();
-    
-    // Cleanup function
+
     return () => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [pois]);
 
-  // Function to update map markers
-  const updateMapMarkers = async (poisToShow, L) => {
-    if (!mapInstanceRef.current || !L) return;
-    
-    // Clear existing markers
+  // Update map markers efficiently
+  const updateMapMarkers = (poisToShow) => {
+    if (!mapInstanceRef.current) return;
+
+    // Clear existing markers quickly
     markersRef.current.forEach(marker => {
       mapInstanceRef.current.removeLayer(marker);
     });
     markersRef.current = [];
-    
+
     // Color mapping for categories
     const categoryColors = {
-      campus: '#667eea',
-      dining: '#feca57', 
-      recreation: '#48dbfb',
-      classes: '#4ecdc4',
-      events: '#ff6b6b'
+      campus: '#3498db',
+      dining: '#f39c12', 
+      academic: '#27ae60',
+      recreation: '#e74c3c',
+      other: '#95a5a6'
     };
-    
-    // Add new markers
+
+    // Add lightweight markers
     poisToShow.forEach(poi => {
-      const color = categoryColors[poi.category] || '#667eea';
+      if (!poi.lat || !poi.lng) return;
+
+      const color = categoryColors[poi.category] || categoryColors.other;
       
-      const customIcon = L.divIcon({
-        className: 'custom-div-icon',
-        html: `<div style="
-          background-color: ${color};
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          border: 2px solid white;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        "></div>`,
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
-      });
-      
-      const marker = L.marker([poi.lat, poi.lng], { icon: customIcon })
-        .addTo(mapInstanceRef.current)
-        .bindPopup(`
-          <div class="popup-content">
-            <h3>${poi.name}</h3>
-            <p><strong>Category:</strong> ${poi.category}</p>
-            <p>${poi.description}</p>
-            <p><strong>Hours:</strong> ${poi.time}</p>
-          </div>
-        `);
-      
+      // Use simple circle markers for performance
+      const marker = L.circleMarker([poi.lat, poi.lng], {
+        color: 'white',
+        fillColor: color,
+        fillOpacity: 0.8,
+        radius: 8,
+        weight: 2,
+        className: 'poi-marker'
+      }).addTo(mapInstanceRef.current);
+
+      // Simple popup
+      marker.bindPopup(`
+        <div class="map-popup">
+          <h4>${poi.name}</h4>
+          <p><strong>${poi.category}</strong></p>
+          <p>${poi.description}</p>
+          <small>${poi.time}</small>
+        </div>
+      `);
+
       markersRef.current.push(marker);
     });
   };
 
-  // Update markers when filtered POIs change
+  // Update markers when filters change
   useEffect(() => {
-    const updateMarkers = async () => {
-      const L = await import('leaflet');
-      updateMapMarkers(filteredPOIs, L.default || L);
-    };
-    
-    if (mapInstanceRef.current) {
-      updateMarkers();
+    if (mapInstanceRef.current && filteredPOIs) {
+      updateMapMarkers(filteredPOIs);
     }
-  }, [selectedCategory, searchTerm]);
+  }, [selectedCategory, debouncedSearchTerm]);
 
+  // Filter POIs
   const filteredPOIs = pois.filter(poi => {
     const matchesCategory = selectedCategory === 'all' || poi.category === selectedCategory;
-    const matchesSearch = poi.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = poi.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+                         poi.description.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
-  const handlePostEvent = () => {
-    alert('Post Event feature - coming soon!');
+  const availableCategories = [...new Set(pois.map(poi => poi.category))];
+
+  const handlePostEvent = async () => {
+    alert('Post Event feature - coming soon! Will integrate with backend.');
   };
 
-  const handleFindClasses = () => {
-    alert('Find Classes feature - coming soon!');
+  const handleFindClasses = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/courses`);
+      const courses = await response.json();
+      if (courses.length === 0) {
+        alert('No courses found. Course data will be available once scrapers are implemented.');
+      } else {
+        alert(`Found ${courses.length} courses! Feature coming soon.`);
+      }
+    } catch (err) {
+      alert('Find Classes feature - coming soon! Backend integration ready.');
+    }
   };
 
   const handleDiningMenus = () => {
@@ -221,13 +274,31 @@ const Home = () => {
   };
 
   const handleDidYouKnow = () => {
-    alert('Did You Know: Students get Uber discounts! Check the resources section.');
+    const tips = [
+      "Students get Uber discounts!",
+      "The 5C consortium allows cross-registration between all colleges.",
+      "There are hidden study spots in most libraries.",
+      "Free printing is available in many campus locations."
+    ];
+    const randomTip = tips[Math.floor(Math.random() * tips.length)];
+    alert(`Did You Know: ${randomTip}`);
   };
+
+  if (loading) {
+    return (
+      <div className="home-container">
+        <div className="loading-container">
+          <h2>Loading 5C Campus Data...</h2>
+          <p>Connecting to backend server...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="home-container">
       <header className="header">
-        <h1>🗺️ 5C Interactive Map</h1>
+        <h1>5C Interactive Map</h1>
         <div className="controls">
           <input
             type="text"
@@ -242,70 +313,87 @@ const Home = () => {
             className="category-dropdown"
           >
             <option value="all">All Categories</option>
-            <option value="campus">Campus Buildings</option>
-            <option value="dining">Dining</option>
-            <option value="recreation">Recreation</option>
-            <option value="classes">Classes</option>
-            <option value="events">Events</option>
+            {availableCategories.map(category => (
+              <option key={category} value={category}>
+                {category.charAt(0).toUpperCase() + category.slice(1)}
+              </option>
+            ))}
           </select>
         </div>
+        {error && (
+          <div className="error-banner">
+            {error}
+          </div>
+        )}
       </header>
 
       <div className="main-content">
         <div className="map-section">
-          <div className="map-container-leaflet">
-            <div ref={mapRef} style={{ height: '100%', width: '100%', borderRadius: '15px' }}></div>
-          </div>
-          
-          <div className="poi-results">
-            <h3>Found {filteredPOIs.length} locations</h3>
-            <div className="poi-list">
-              {filteredPOIs.map(poi => (
-                <div key={poi.id} className="poi-card">
-                  <h4>{poi.name}</h4>
-                  <span className={`poi-category ${poi.category}`}>{poi.category}</span>
-                  <p>{poi.description}</p>
-                  <small>⏰ {poi.time}</small>
-                </div>
-              ))}
+          <div className="leaflet-map-container">
+            <div ref={mapRef} className="leaflet-map"></div>
+            <div className="map-overlay">
+              <div className="map-info">
+                <span className="status-indicator online"></span>
+                Interactive Map | {filteredPOIs.length} locations
+              </div>
             </div>
           </div>
         </div>
-
-        <div className="sidebar">
-          <div className="quick-actions">
-            <h3>Quick Actions</h3>
-            <button className="action-btn events" onClick={handlePostEvent}>
-              📅 Post Event
-            </button>
-            <button className="action-btn classes" onClick={handleFindClasses}>
-              📚 Find Classes
-            </button>
-            <button className="action-btn dining" onClick={handleDiningMenus}>
-              🍽️ Dining Menus
-            </button>
-            <button className="action-btn tips" onClick={handleDidYouKnow}>
-              💡 Did You Know?
-            </button>
-          </div>
-
-          <div className="stats-section">
-            <h3>Campus Stats</h3>
-            <div className="stat">
-              <span>Total POIs</span>
-              <strong>{pois.length}</strong>
-            </div>
-            <div className="stat">
-              <span>Active Events</span>
-              <strong>12</strong>
-            </div>
-            <div className="stat">
-              <span>Open Dining</span>
-              <strong>3</strong>
-            </div>
+        
+        <div className="locations-list">
+          <h3>Locations ({filteredPOIs.length})</h3>
+          <div className="locations-scroll">
+            {filteredPOIs.length === 0 ? (
+              <div className="no-results">
+                <p>No locations match your search criteria.</p>
+                <p>Try adjusting your filters or search term.</p>
+              </div>
+            ) : (
+              filteredPOIs.map(poi => (
+                <div key={poi.id} className="location-card">
+                  <h4>{poi.name}</h4>
+                  <span className={`category ${poi.category}`}>{poi.category}</span>
+                  <p>{poi.description}</p>
+                  <small>📍 {poi.lat?.toFixed(4)}, {poi.lng?.toFixed(4)}</small>
+                  <small>⏰ {poi.time}</small>
+                  {poi.college && (
+                    <div className="college-tag">{poi.college}</div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
+
+      <div className="quick-actions">
+        <button className="action-btn events" onClick={handlePostEvent}>
+          📅 Post Event
+        </button>
+        <button className="action-btn classes" onClick={handleFindClasses}>
+          📚 Find Classes
+        </button>
+        <button className="action-btn dining" onClick={handleDiningMenus}>
+          🍽️ Dining Menus
+        </button>
+        <button className="action-btn tips" onClick={handleDidYouKnow}>
+          💡 Did You Know?
+        </button>
+      </div>
+
+      <footer className="footer">
+        <div className="footer-content">
+          <div className="stats">
+            <span>Total Locations: {pois.length}</span>
+            <span>Colleges: {colleges.length}</span>
+            <span>Categories: {availableCategories.length}</span>
+          </div>
+          <div className="backend-info">
+            <p>Powered by 5C Maps Backend API</p>
+            <p>Claremont-focused interactive mapping</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
