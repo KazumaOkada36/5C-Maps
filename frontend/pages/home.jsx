@@ -40,7 +40,7 @@ const Home = ({ currentUser, onLogout }) => {
   const markersRef = useRef([]);
   const userMarkerRef = useRef(null);
 
-  const API_BASE = 'https://fivec-maps.onrender.com';
+  const API_BASE = 'https://fivec-maps.onrender.com/api/v1';
 
   const CLAREMONT_BOUNDS = {
     north: 34.1070,
