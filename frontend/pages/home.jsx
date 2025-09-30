@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import '../styles/home.css';
+import Schedule from './Schedule.jsx';
+import Calendar from './Calendar.jsx';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -10,19 +12,25 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-const Home = () => {
+const Home = ({ currentUser, onLogout }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [pois, setPois] = useState([]);
   const [events, setEvents] = useState([]);
+  const [pendingEvents, setPendingEvents] = useState([]);
   const [expandedCategory, setExpandedCategory] = useState(null);
   const [expandedEventType, setExpandedEventType] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showEventForm, setShowEventForm] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [starredItems, setStarredItems] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [eventFormData, setEventFormData] = useState({
     title: '',
     event_type: 'fun',
-    date_time: '',
+    event_date: '',
+    event_time: '',
+    time_period: 'AM',
     location_id: '',
     description: ''
   });
@@ -62,7 +70,15 @@ const Home = () => {
         }));
 
         setPois(formattedPOIs);
-        setEvents(eventsData);
+        
+        const approved = eventsData.filter(e => e.status !== 'pending');
+        const pending = eventsData.filter(e => e.status === 'pending');
+        setEvents(approved);
+        setPendingEvents(pending);
+        
+        if (currentUser.id) {
+          fetchStarredItems();
+        }
       } catch (err) {
         console.error('Failed to fetch:', err);
       } finally {
@@ -71,7 +87,7 @@ const Home = () => {
     };
 
     fetchData();
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     const initMap = async () => {
@@ -124,7 +140,6 @@ const Home = () => {
     };
   }, [pois]);
 
-  // Get user location
   useEffect(() => {
     if (navigator.geolocation && mapInstanceRef.current) {
       const watchId = navigator.geolocation.watchPosition(
@@ -206,6 +221,58 @@ const Home = () => {
     });
   };
 
+  const fetchStarredItems = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/starred?user_id=${currentUser.id}`);
+      const data = await response.json();
+      setStarredItems(data);
+    } catch (err) {
+      console.error('Failed to fetch starred:', err);
+    }
+  };
+
+  const isStarred = (itemType, itemId) => {
+    return starredItems.some(s => s.item_type === itemType && s.item_id === itemId);
+  };
+
+  const handleStar = async (itemType, itemId) => {
+    if (currentUser.role === 'guest') {
+      alert('Guests cannot star items. Please create an account!');
+      return;
+    }
+
+    const starred = starredItems.find(s => s.item_type === itemType && s.item_id === itemId);
+    
+    if (starred) {
+      try {
+        await fetch(`${API_BASE}/starred/${starred.id}`, { method: 'DELETE' });
+        setStarredItems(starredItems.filter(s => s.id !== starred.id));
+      } catch (err) {
+        console.error('Failed to unstar:', err);
+      }
+    } else {
+      try {
+        const response = await fetch(`${API_BASE}/starred`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: currentUser.id,
+            item_type: itemType,
+            item_id: itemId
+          })
+        });
+        const data = await response.json();
+        setStarredItems([...starredItems, data]);
+        
+        if (itemType === 'event') {
+          alert('⭐ Event added to your calendar!');
+        }
+      } catch (err) {
+        console.error('Failed to star:', err);
+      }
+    }
+  };
+
   const filteredBySearch = searchTerm
     ? pois.filter(poi => poi.name.toLowerCase().includes(searchTerm.toLowerCase()))
     : pois;
@@ -277,11 +344,18 @@ const Home = () => {
   };
 
   const handlePostEvent = () => {
+    if (currentUser.role === 'guest') {
+      alert('Guests cannot post events. Please login as a student or admin.');
+      return;
+    }
     setShowEventForm(true);
   };
 
   const submitEvent = async (e) => {
     e.preventDefault();
+    
+    const formattedTime = `${eventFormData.event_time} ${eventFormData.time_period}`;
+    const dateTimeString = `${new Date(eventFormData.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${formattedTime}`;
     
     try {
       const response = await fetch(`${API_BASE}/events`, {
@@ -289,26 +363,49 @@ const Home = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(eventFormData)
+        body: JSON.stringify({
+          ...eventFormData,
+          event_time: formattedTime,
+          date_time: dateTimeString,
+          created_by: currentUser.username,
+          status: currentUser.role === 'admin' ? 'approved' : 'pending'
+        })
       });
       
       if (response.ok) {
         const newEvent = await response.json();
-        setEvents([...events, newEvent]);
+        
+        if (currentUser.role === 'admin') {
+          setEvents([...events, newEvent]);
+          alert('Event posted and approved!');
+        } else {
+          setPendingEvents([...pendingEvents, newEvent]);
+          alert('Event submitted for approval!');
+        }
+        
         setShowEventForm(false);
         setEventFormData({
           title: '',
           event_type: 'fun',
-          date_time: '',
+          event_date: '',
+          event_time: '',
+          time_period: 'AM',
           location_id: '',
           description: ''
         });
-        alert('Event posted successfully!');
       }
     } catch (err) {
       console.error('Failed to post event:', err);
       alert('Failed to post event. Please try again.');
     }
+  };
+
+  const handleApproveEvent = (eventId, approved) => {
+    const event = pendingEvents.find(e => e.id === eventId);
+    if (approved) {
+      setEvents([...events, { ...event, status: 'approved' }]);
+    }
+    setPendingEvents(pendingEvents.filter(e => e.id !== eventId));
   };
 
   if (loading) {
@@ -324,14 +421,27 @@ const Home = () => {
   return (
     <div className="home-container">
       <header className="header">
-        <h1>5C Interactive Map</h1>
-        <input
-          type="text"
-          placeholder="Search locations..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="search-input"
-        />
+        <div className="header-left">
+          <div className="chizu-header-logo">
+            <span className="logo-icon-small">🗾</span>
+            <h1>Chizu</h1>
+          </div>
+          <span className="tagline">5C Campus Navigation</span>
+        </div>
+        <div className="header-right">
+          <input
+            type="text"
+            placeholder="Search locations..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="search-input"
+          />
+          <div className="user-info">
+            <span className="user-name">{currentUser.name}</span>
+            <span className={`user-badge ${currentUser.role}`}>{currentUser.role}</span>
+            <button onClick={onLogout} className="logout-btn">Logout</button>
+          </div>
+        </div>
       </header>
 
       <div className="main-content">
@@ -348,6 +458,80 @@ const Home = () => {
         
         <div className="sidebar">
           <h3 className="sidebar-title">Categories</h3>
+          
+          {(currentUser.role === 'student' || currentUser.role === 'guest') && (
+            <>
+              <div className="category-section">
+                <button 
+                  className="category-btn schedule-btn"
+                  onClick={() => setShowSchedule(true)}
+                >
+                  <span className="category-icon">📚</span>
+                  <span className="category-name">Class Schedule</span>
+                </button>
+              </div>
+              
+              <div className="category-section">
+                <button 
+                  className="category-btn calendar-btn"
+                  onClick={() => setShowCalendar(true)}
+                >
+                  <span className="category-icon">📅</span>
+                  <span className="category-name">My Calendar</span>
+                  {starredItems.filter(s => s.item_type === 'event').length > 0 && (
+                    <span className="category-count star-badge">
+                      {starredItems.filter(s => s.item_type === 'event').length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
+
+          {currentUser.role === 'admin' && pendingEvents.length > 0 && (
+            <div className="category-section">
+              <button 
+                className="category-btn approval-btn"
+                onClick={() => setExpandedCategory('approvals')}
+              >
+                <span className="category-icon">✅</span>
+                <span className="category-name">Event Approvals</span>
+                <span className="category-count pending-badge">{pendingEvents.length}</span>
+                <span className="expand-icon">{expandedCategory === 'approvals' ? '▼' : '▶'}</span>
+              </button>
+              
+              {expandedCategory === 'approvals' && (
+                <div className="approval-list">
+                  {pendingEvents.map(event => (
+                    <div key={event.id} className="approval-item">
+                      <div className="approval-header">
+                        <strong>{event.title}</strong>
+                        <span className="pending-tag">PENDING</span>
+                      </div>
+                      <div className="approval-details">
+                        <div>{event.date_time}</div>
+                        {event.location && <div>📍 {event.location.name}</div>}
+                        <div className="approval-actions">
+                          <button 
+                            onClick={() => handleApproveEvent(event.id, true)}
+                            className="approve-btn"
+                          >
+                            ✓ Approve
+                          </button>
+                          <button 
+                            onClick={() => handleApproveEvent(event.id, false)}
+                            className="reject-btn"
+                          >
+                            ✕ Reject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           
           {categories.map(category => {
             if (category.id === 'events') {
@@ -394,7 +578,20 @@ const Home = () => {
                                       className="event-item"
                                       onClick={() => focusOnEvent(event)}
                                     >
-                                      <div className="event-title">{event.title}</div>
+                                      <div className="event-header-row">
+                                        <div className="event-title">{event.title}</div>
+                                        {currentUser.role !== 'guest' && (
+                                          <button
+                                            className={`star-btn ${isStarred('event', event.id) ? 'starred' : ''}`}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleStar('event', event.id);
+                                            }}
+                                          >
+                                            {isStarred('event', event.id) ? '⭐' : '☆'}
+                                          </button>
+                                        )}
+                                      </div>
                                       <div className="event-time">{event.date_time}</div>
                                       {event.location && (
                                         <div className="event-location">{event.location.name}</div>
@@ -442,8 +639,23 @@ const Home = () => {
                           className="location-item"
                           onClick={() => focusOnLocation(poi)}
                         >
-                          <div className="location-name">{poi.name}</div>
-                          <div className="location-college">{poi.college}</div>
+                          <div className="location-header-row">
+                            <div>
+                              <div className="location-name">{poi.name}</div>
+                              <div className="location-college">{poi.college}</div>
+                            </div>
+                            {currentUser.role !== 'guest' && (
+                              <button
+                                className={`star-btn ${isStarred('location', poi.id) ? 'starred' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStar('location', poi.id);
+                                }}
+                              >
+                                {isStarred('location', poi.id) ? '⭐' : '☆'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))
                     )}
@@ -459,6 +671,9 @@ const Home = () => {
         <div className="modal-overlay" onClick={() => setShowEventForm(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h2>Post New Event</h2>
+            {currentUser.role === 'student' && (
+              <p className="info-message">Your event will be submitted for admin approval</p>
+            )}
             <form onSubmit={submitEvent}>
               <div className="form-group">
                 <label>Event Title</label>
@@ -483,14 +698,35 @@ const Home = () => {
               </div>
               
               <div className="form-group">
-                <label>Date & Time</label>
+                <label>Event Date</label>
                 <input
-                  type="text"
+                  type="date"
                   required
-                  placeholder="Oct 15, 2024 at 6:00 PM"
-                  value={eventFormData.date_time}
-                  onChange={(e) => setEventFormData({...eventFormData, date_time: e.target.value})}
+                  value={eventFormData.event_date}
+                  onChange={(e) => setEventFormData({...eventFormData, event_date: e.target.value})}
+                  min={new Date().toISOString().split('T')[0]}
                 />
+              </div>
+              
+              <div className="form-group">
+                <label>Event Time</label>
+                <div className="time-input-group">
+                  <input
+                    type="time"
+                    required
+                    value={eventFormData.event_time}
+                    onChange={(e) => setEventFormData({...eventFormData, event_time: e.target.value})}
+                    className="time-input"
+                  />
+                  <select
+                    value={eventFormData.time_period}
+                    onChange={(e) => setEventFormData({...eventFormData, time_period: e.target.value})}
+                    className="period-select"
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                </div>
               </div>
               
               <div className="form-group">
@@ -521,10 +757,26 @@ const Home = () => {
                   Cancel
                 </button>
                 <button type="submit" className="btn-submit">
-                  Post Event
+                  {currentUser.role === 'admin' ? 'Post Event' : 'Submit for Approval'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showSchedule && (
+        <div className="modal-overlay" onClick={() => setShowSchedule(false)}>
+          <div className="modal-content schedule-modal" onClick={(e) => e.stopPropagation()}>
+            <Schedule currentUser={currentUser} onClose={() => setShowSchedule(false)} />
+          </div>
+        </div>
+      )}
+
+      {showCalendar && (
+        <div className="modal-overlay" onClick={() => setShowCalendar(false)}>
+          <div className="modal-content calendar-modal" onClick={(e) => e.stopPropagation()}>
+            <Calendar currentUser={currentUser} onClose={() => setShowCalendar(false)} />
           </div>
         </div>
       )}
@@ -549,9 +801,12 @@ const Home = () => {
           <div className="stats">
             <span>Total Locations: {pois.length}</span>
             <span>Total Events: {events.length}</span>
+            {currentUser.role === 'admin' && pendingEvents.length > 0 && (
+              <span className="pending-stat">Pending Approvals: {pendingEvents.length}</span>
+            )}
           </div>
           <div className="backend-info">
-            <p>Powered by 5C Maps Backend API</p>
+            <p>Powered by Chizu 🗾</p>
           </div>
         </div>
       </footer>
