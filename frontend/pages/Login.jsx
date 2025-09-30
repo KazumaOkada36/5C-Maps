@@ -17,7 +17,7 @@ const Login = ({ onLogin, onShowRegister }) => {
     }
     
     try {
-      const response = await fetch('https://fivec-maps.onrender.com/api/v1', {
+      const response = await fetch('https://fivec-maps.onrender.com/api/v1/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
