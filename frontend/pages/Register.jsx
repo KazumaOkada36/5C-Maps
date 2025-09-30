@@ -15,7 +15,7 @@ const Register = ({ onRegister, onBackToLogin }) => {
 
   useEffect(() => {
     // Fetch colleges list
-    fetch('http://localhost:8080/api/v1/colleges')
+    fetch('https://fivec-maps.onrender.com/api/v1/colleges')
       .then(res => res.json())
       .then(data => setColleges(data))
       .catch(err => console.error('Failed to fetch colleges:', err));
@@ -37,7 +37,7 @@ const Register = ({ onRegister, onBackToLogin }) => {
     }
 
     try {
-      const response = await fetch('http://localhost:8080/api/v1/auth/register', {
+      const response = await fetch('https://fivec-maps.onrender.com/api/v1/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
