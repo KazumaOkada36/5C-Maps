@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import '../styles/login.css';
 
-const Login = ({ onLogin, onShowRegister }) => {
+const Login = ({ onLogin, onShowRegister, onShowForgotPassword }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('student');
@@ -109,6 +109,16 @@ const Login = ({ onLogin, onShowRegister }) => {
                   placeholder="Enter your password"
                   required
                 />
+              </div>
+
+              <div className="forgot-password-link">
+                <button 
+                  type="button" 
+                  onClick={onShowForgotPassword}
+                  className="text-link"
+                >
+                  Forgot username or password?
+                </button>
               </div>
             </>
           )}

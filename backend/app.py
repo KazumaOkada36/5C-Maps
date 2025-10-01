@@ -1,15 +1,26 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import hashlib
+import secrets
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 app = Flask(__name__)
 CORS(app)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///5c_maps.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Email Configuration - Set these as environment variables
+app.config['SMTP_SERVER'] = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+app.config['SMTP_PORT'] = int(os.environ.get('SMTP_PORT', 587))
+app.config['SMTP_USERNAME'] = os.environ.get('SMTP_USERNAME', '')
+app.config['SMTP_PASSWORD'] = os.environ.get('SMTP_PASSWORD', '')
+app.config['FROM_EMAIL'] = os.environ.get('FROM_EMAIL', 'noreply@chizu.app')
 
 db = SQLAlchemy(app)
 
@@ -32,6 +43,16 @@ class User(db.Model):
             'role': self.role,
             'college': self.college
         }
+
+class PasswordResetToken(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token = db.Column(db.String(100), unique=True, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', backref='reset_tokens')
 
 class College(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -111,6 +132,166 @@ class StarredItem(db.Model):
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
+def send_email(to_email, subject, html_content):
+    """Send an email using SMTP"""
+    try:
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = app.config['FROM_EMAIL']
+        msg['To'] = to_email
+        
+        # Attach HTML content
+        html_part = MIMEText(html_content, 'html')
+        msg.attach(html_part)
+        
+        # Send email
+        with smtplib.SMTP(app.config['SMTP_SERVER'], app.config['SMTP_PORT']) as server:
+            server.starttls()
+            server.login(app.config['SMTP_USERNAME'], app.config['SMTP_PASSWORD'])
+            server.send_message(msg)
+        
+        return True
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+        return False
+
+def send_welcome_email(user, password):
+    """Send welcome email with account credentials"""
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+            .content {{ background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }}
+            .credentials {{ background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }}
+            .credential-item {{ margin: 10px 0; }}
+            .label {{ font-weight: bold; color: #667eea; }}
+            .value {{ background: #e9ecef; padding: 8px 12px; border-radius: 4px; display: inline-block; margin-left: 10px; font-family: monospace; }}
+            .footer {{ text-align: center; margin-top: 20px; color: #6c757d; font-size: 0.9em; }}
+            .button {{ display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🗾 Welcome to Chizu!</h1>
+            </div>
+            <div class="content">
+                <h2>Hello {user.name}! 👋</h2>
+                <p>Your Chizu account has been successfully created. You can now access the 5C Campus Navigation system.</p>
+                
+                <div class="credentials">
+                    <h3>Your Account Credentials:</h3>
+                    <div class="credential-item">
+                        <span class="label">Username:</span>
+                        <span class="value">{user.username}</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="label">Password:</span>
+                        <span class="value">{password}</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="label">Email:</span>
+                        <span class="value">{user.email}</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="label">College:</span>
+                        <span class="value">{user.college}</span>
+                    </div>
+                </div>
+                
+                <p><strong>⚠️ Important:</strong> Please save these credentials in a safe place. We recommend changing your password after your first login.</p>
+                
+                <p>With Chizu, you can:</p>
+                <ul>
+                    <li>🗺️ Navigate the 5C campus easily</li>
+                    <li>📅 Discover and star campus events</li>
+                    <li>🍽️ Find dining halls and their menus</li>
+                    <li>📚 Manage your class schedule</li>
+                    <li>🎯 Stay connected with campus activities</li>
+                </ul>
+                
+                <div style="text-align: center;">
+                    <a href="https://5-c-maps.vercel.app" class="button">Login to Chizu</a>
+                </div>
+            </div>
+            <div class="footer">
+                <p>Powered by Chizu 🗾 | Interactive Campus Navigation</p>
+                <p>If you didn't create this account, please ignore this email.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return send_email(user.email, "Welcome to Chizu - Your Account Details", html_content)
+
+def send_password_reset_email(user, reset_token):
+    """Send password reset email with token"""
+    reset_link = f"https://5-c-maps.vercel.app/reset-password?token={reset_token}"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+            .content {{ background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }}
+            .info-box {{ background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }}
+            .username {{ background: #e9ecef; padding: 8px 12px; border-radius: 4px; display: inline-block; font-family: monospace; font-weight: bold; }}
+            .button {{ display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
+            .warning {{ background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 4px; margin: 20px 0; }}
+            .footer {{ text-align: center; margin-top: 20px; color: #6c757d; font-size: 0.9em; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🔐 Password Reset Request</h1>
+            </div>
+            <div class="content">
+                <h2>Hello {user.name}!</h2>
+                <p>We received a request to reset your password for your Chizu account.</p>
+                
+                <div class="info-box">
+                    <p><strong>Your Username:</strong> <span class="username">{user.username}</span></p>
+                    <p style="margin-top: 10px; color: #6c757d; font-size: 0.9em;">Your username never changes and can be used to log in.</p>
+                </div>
+                
+                <p>Click the button below to reset your password:</p>
+                
+                <div style="text-align: center;">
+                    <a href="{reset_link}" class="button">Reset Password</a>
+                </div>
+                
+                <p style="margin-top: 20px;">Or copy and paste this link into your browser:</p>
+                <p style="background: #e9ecef; padding: 10px; border-radius: 4px; word-break: break-all; font-size: 0.9em;">{reset_link}</p>
+                
+                <div class="warning">
+                    <strong>⏰ Important:</strong> This password reset link will expire in 1 hour for security reasons.
+                </div>
+                
+                <div class="warning" style="background: #f8d7da; border-left-color: #dc3545;">
+                    <strong>⚠️ Security Notice:</strong> If you didn't request this password reset, please ignore this email. Your password will remain unchanged.
+                </div>
+            </div>
+            <div class="footer">
+                <p>Powered by Chizu 🗾 | Interactive Campus Navigation</p>
+                <p>This is an automated email. Please do not reply.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return send_email(user.email, "Reset Your Chizu Password", html_content)
+
 @app.route('/')
 def health():
     return {"status": "running", "app": "Chizu"}
@@ -125,9 +306,11 @@ def register():
     if User.query.filter_by(email=data['email']).first():
         return jsonify({'error': 'Email already exists'}), 400
     
+    password = data['password']
+    
     new_user = User(
         username=data['username'],
-        password_hash=hash_password(data['password']),
+        password_hash=hash_password(password),
         name=data['name'],
         email=data['email'],
         college=data.get('college', ''),
@@ -137,9 +320,13 @@ def register():
     db.session.add(new_user)
     db.session.commit()
     
+    # Send welcome email
+    email_sent = send_welcome_email(new_user, password)
+    
     return jsonify({
         'message': 'Account created successfully!',
-        'user': new_user.to_dict()
+        'user': new_user.to_dict(),
+        'email_sent': email_sent
     }), 201
 
 @app.route('/api/v1/auth/login', methods=['POST'])
@@ -157,6 +344,84 @@ def login():
         })
     
     return jsonify({'error': 'Invalid credentials'}), 401
+
+@app.route('/api/v1/auth/forgot-password', methods=['POST'])
+def forgot_password():
+    data = request.json
+    email = data.get('email')
+    
+    if not email:
+        return jsonify({'error': 'Email is required'}), 400
+    
+    user = User.query.filter_by(email=email).first()
+    
+    if not user:
+        # Don't reveal if email exists for security
+        return jsonify({'message': 'If an account with that email exists, a password reset link has been sent.'}), 200
+    
+    # Generate reset token
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(hours=1)
+    
+    reset_token = PasswordResetToken(
+        user_id=user.id,
+        token=token,
+        expires_at=expires_at
+    )
+    
+    db.session.add(reset_token)
+    db.session.commit()
+    
+    # Send reset email
+    email_sent = send_password_reset_email(user, token)
+    
+    return jsonify({
+        'message': 'If an account with that email exists, a password reset link has been sent.',
+        'email_sent': email_sent
+    }), 200
+
+@app.route('/api/v1/auth/reset-password', methods=['POST'])
+def reset_password():
+    data = request.json
+    token = data.get('token')
+    new_password = data.get('password')
+    
+    if not token or not new_password:
+        return jsonify({'error': 'Token and new password are required'}), 400
+    
+    reset_token = PasswordResetToken.query.filter_by(token=token, used=False).first()
+    
+    if not reset_token:
+        return jsonify({'error': 'Invalid or expired reset token'}), 400
+    
+    if reset_token.expires_at < datetime.utcnow():
+        return jsonify({'error': 'Reset token has expired'}), 400
+    
+    # Update user password
+    user = reset_token.user
+    user.password_hash = hash_password(new_password)
+    reset_token.used = True
+    
+    db.session.commit()
+    
+    return jsonify({'message': 'Password successfully reset'}), 200
+
+@app.route('/api/v1/auth/verify-reset-token/<token>', methods=['GET'])
+def verify_reset_token(token):
+    """Verify if a reset token is valid"""
+    reset_token = PasswordResetToken.query.filter_by(token=token, used=False).first()
+    
+    if not reset_token:
+        return jsonify({'valid': False, 'error': 'Invalid token'}), 400
+    
+    if reset_token.expires_at < datetime.utcnow():
+        return jsonify({'valid': False, 'error': 'Token expired'}), 400
+    
+    return jsonify({
+        'valid': True,
+        'username': reset_token.user.username,
+        'email': reset_token.user.email
+    }), 200
 
 @app.route('/api/v1/colleges')
 def get_colleges():
@@ -341,8 +606,3 @@ if __name__ == '__main__':
         init_db()
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port, debug=False)
-
-'''if __name__ == '__main__':
-    with app.app_context():
-        init_db()
-    app.run(debug=True, port=8080)'''
