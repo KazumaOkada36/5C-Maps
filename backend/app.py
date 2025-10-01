@@ -13,7 +13,7 @@ from threading import Thread
 app = Flask(__name__)
 CORS(app)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///5c_maps.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///chizu_v2.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Email Configuration
@@ -637,11 +637,11 @@ def init_db():
     """Initialize database with sample data"""
     with app.app_context():
         # NUCLEAR OPTION: Drop and recreate ONCE
-        import os
+        '''import os
         db_path = 'instance/5c_maps.db'
         if os.path.exists(db_path):
             print("🔥 Deleting old database file...")
-            os.remove(db_path)
+            os.remove(db_path)'''
         
         # Create tables
         db.drop_all()
