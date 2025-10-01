@@ -633,28 +633,15 @@ def delete_event(event_id):
 def get_courses():
     return jsonify([])
 
-def init_db():
-    """Initialize database with sample data"""
-    with app.app_context():
-        # NUCLEAR OPTION: Drop and recreate ONCE
-        '''import os
-        db_path = 'instance/5c_maps.db'
-        if os.path.exists(db_path):
-            print("🔥 Deleting old database file...")
-            os.remove(db_path)'''
-        
-        # Create tables
-        db.drop_all()
-        db.create_all()
-        print("✅ Database tables created")
-        
-        # Check if already initialized
-        if College.query.count() > 0:
-            print("✅ Database already has data")
-            return
-        
+# Initialize database when module loads (works with gunicorn)
+with app.app_context():
+    db.create_all()
+    print("✅ Database tables created")
+    
+    # Check if already initialized
+    if College.query.count() == 0:
         print("🔄 Initializing database with sample data...")
-        
+    
         # Create admin user
         admin = User(
             username='admin',
@@ -749,20 +736,20 @@ def init_db():
         # Create sample events
         events = [
             Event(title="Welcome Week", event_type="fun", 
-                  date_time="Oct 15, 2024 at 6:00 PM",
-                  event_date="2024-10-15",
-                  event_time="6:00 PM",
-                  location_id=1, description="Welcome new students!", status="approved", created_by="admin"),
+                date_time="Oct 15, 2024 at 6:00 PM",
+                event_date="2024-10-15",
+                event_time="6:00 PM",
+                location_id=1, description="Welcome new students!", status="approved", created_by="admin"),
             Event(title="Career Fair", event_type="career", 
-                  date_time="Oct 20, 2024 at 2:00 PM",
-                  event_date="2024-10-20",
-                  event_time="2:00 PM",
-                  location_id=16, description="Meet employers", status="approved", created_by="admin"),
+                date_time="Oct 20, 2024 at 2:00 PM",
+                event_date="2024-10-20",
+                event_time="2:00 PM",
+                location_id=16, description="Meet employers", status="approved", created_by="admin"),
             Event(title="Movie Night", event_type="fun", 
-                  date_time="Oct 25, 2024 at 8:00 PM",
-                  event_date="2024-10-25",
-                  event_time="8:00 PM",
-                  location_id=16, description="Free popcorn!", status="pending", created_by="student"),
+                date_time="Oct 25, 2024 at 8:00 PM",
+                event_date="2024-10-25",
+                event_time="8:00 PM",
+                location_id=16, description="Free popcorn!", status="pending", created_by="student"),
         ]
         
         for e in events:
@@ -771,16 +758,7 @@ def init_db():
         
         print(f"✅ Database initialized with {len(locations)} locations and {len(events)} events")
 
-# This runs ALWAYS, not just when using python directly
-with app.app_context():
-    db.create_all()
-    
-    # Only initialize data if database is empty
-    if College.query.count() == 0:
-        print("Initializing database...")
-        # Put all your initialization code here (colleges, locations, events, etc.)
-
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
-    print(f"Starting Chizu backend on port {port}")
+    print(f"🚀 Starting Chizu backend on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
