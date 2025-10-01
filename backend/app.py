@@ -558,9 +558,13 @@ def get_courses():
     return jsonify([])
 
 def init_db():
-    # Drop all tables and recreate (ONLY for development!)
-    db.drop_all()
+    # Create all tables if they don't exist
     db.create_all()
+    
+    # Check if we need to initialize data
+    if College.query.count() > 0:
+        print("Database already initialized")
+        return
     
     print("Initializing database...")
     
