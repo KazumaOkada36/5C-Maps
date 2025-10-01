@@ -10,6 +10,22 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from threading import Thread
 
+# TEMPORARY: Force delete old database to recreate with new structure
+db_paths = [
+    '5c_maps.db',
+    'instance/5c_maps.db',
+    '/opt/render/project/src/5c_maps.db',
+    '/opt/render/project/src/instance/5c_maps.db'
+]
+
+for db_path in db_paths:
+    if os.path.exists(db_path):
+        try:
+            os.remove(db_path)
+            print(f"🗑️ Deleted old database at {db_path}")
+        except Exception as e:
+            print(f"Failed to delete {db_path}: {e}")
+
 app = Flask(__name__)
 CORS(app)
 
