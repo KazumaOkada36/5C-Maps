@@ -13,7 +13,7 @@ from threading import Thread
 app = Flask(__name__)
 CORS(app)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///5c_maps.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///5c_maps.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Email Configuration
@@ -24,15 +24,6 @@ app.config['SMTP_PASSWORD'] = os.environ.get('SMTP_PASSWORD', '')
 app.config['FROM_EMAIL'] = os.environ.get('FROM_EMAIL', 'noreply@chizu.app')
 
 db = SQLAlchemy(app)
-
-# FORCE DATABASE RESET - Run this once to fix the issue
-with app.app_context():
-    print("🔄 Dropping all tables...")
-    db.drop_all()
-    print("✅ All tables dropped")
-    print("🔄 Creating all tables...")
-    db.create_all()
-    print("✅ All tables created")
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -81,7 +72,7 @@ class Location(db.Model):
     category = db.Column(db.String(50))
     college_id = db.Column(db.Integer, db.ForeignKey('college.id'))
     description = db.Column(db.String(500))
-    fun_facts = db.Column(db.Text)  # JSON string of fun facts
+    fun_facts = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     college = db.relationship('College', backref='locations')
@@ -102,10 +93,10 @@ class LocationPost(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
     content = db.Column(db.String(500), nullable=False)
-    post_type = db.Column(db.String(20), nullable=False)  # 'temporary' or 'permanent'
-    status = db.Column(db.String(20), default='pending')  # 'pending', 'approved', 'expired'
+    post_type = db.Column(db.String(20), nullable=False)
+    status = db.Column(db.String(20), default='pending')
     created_by = db.Column(db.String(100), default='Anonymous')
-    expires_at = db.Column(db.DateTime)  # For temporary posts
+    expires_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     location = db.relationship('Location', backref='posts')
@@ -257,439 +248,528 @@ def send_password_reset_email(user, reset_token):
 
 @app.route('/')
 def health():
-    return {"status": "running", "app": "Chizu"}
+    return jsonify({"status": "running", "app": "Chizu"})
 
 @app.route('/api/v1/auth/register', methods=['POST'])
 def register():
-    data = request.json
-    
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({'error': 'Username already exists'}), 400
-    
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({'error': 'Email already exists'}), 400
-    
-    password = data['password']
-    
-    new_user = User(
-        username=data['username'],
-        password_hash=hash_password(password),
-        name=data['name'],
-        email=data['email'],
-        college=data.get('college', ''),
-        role='student'
-    )
-    
-    db.session.add(new_user)
-    db.session.commit()
-    
-    # Send welcome email in background thread
-    def send_email_background():
-        try:
-            with app.app_context():
-                send_welcome_email(new_user, password)
-                print(f"✅ Welcome email sent to {new_user.email}")
-        except Exception as e:
-            print(f"❌ Failed to send welcome email: {e}")
-    
-    thread = Thread(target=send_email_background)
-    thread.daemon = True
-    thread.start()
-    
-    return jsonify({
-        'message': 'Account created successfully! Check your email for credentials.',
-        'user': new_user.to_dict()
-    }), 201
+    try:
+        data = request.json
+        
+        if User.query.filter_by(username=data['username']).first():
+            return jsonify({'error': 'Username already exists'}), 400
+        
+        if User.query.filter_by(email=data['email']).first():
+            return jsonify({'error': 'Email already exists'}), 400
+        
+        password = data['password']
+        
+        new_user = User(
+            username=data['username'],
+            password_hash=hash_password(password),
+            name=data['name'],
+            email=data['email'],
+            college=data.get('college', ''),
+            role='student'
+        )
+        
+        db.session.add(new_user)
+        db.session.commit()
+        
+        # Send welcome email in background thread
+        def send_email_background():
+            try:
+                with app.app_context():
+                    send_welcome_email(new_user, password)
+                    print(f"✅ Welcome email sent to {new_user.email}")
+            except Exception as e:
+                print(f"❌ Failed to send welcome email: {e}")
+        
+        thread = Thread(target=send_email_background)
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'message': 'Account created successfully! Check your email for credentials.',
+            'user': new_user.to_dict()
+        }), 201
+    except Exception as e:
+        print(f"❌ Registration error: {e}")
+        return jsonify({'error': 'Registration failed'}), 500
 
 @app.route('/api/v1/auth/login', methods=['POST'])
 def login():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    
-    user = User.query.filter_by(username=username).first()
-    
-    if user and user.password_hash == hash_password(password):
-        return jsonify({
-            'success': True,
-            'user': user.to_dict()
-        })
-    
-    return jsonify({'error': 'Invalid credentials'}), 401
+    try:
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
+        
+        user = User.query.filter_by(username=username).first()
+        
+        if user and user.password_hash == hash_password(password):
+            return jsonify({
+                'success': True,
+                'user': user.to_dict()
+            })
+        
+        return jsonify({'error': 'Invalid credentials'}), 401
+    except Exception as e:
+        print(f"❌ Login error: {e}")
+        return jsonify({'error': 'Login failed'}), 500
 
 @app.route('/api/v1/auth/forgot-password', methods=['POST'])
 def forgot_password():
-    data = request.json
-    email = data.get('email')
-    
-    if not email:
-        return jsonify({'error': 'Email is required'}), 400
-    
-    user = User.query.filter_by(email=email).first()
-    
-    if not user:
-        return jsonify({'message': 'If an account with that email exists, a password reset link has been sent.'}), 200
-    
-    token = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(hours=1)
-    
-    reset_token = PasswordResetToken(
-        user_id=user.id,
-        token=token,
-        expires_at=expires_at
-    )
-    
-    db.session.add(reset_token)
-    db.session.commit()
-    
-    # Send reset email in background thread
-    def send_email_background():
-        try:
-            with app.app_context():
-                send_password_reset_email(user, token)
-                print(f"✅ Reset email sent to {user.email}")
-        except Exception as e:
-            print(f"❌ Failed to send reset email: {e}")
-    
-    thread = Thread(target=send_email_background)
-    thread.daemon = True
-    thread.start()
-    
-    return jsonify({
-        'message': 'If an account with that email exists, a password reset link has been sent.'
-    }), 200
+    try:
+        data = request.json
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            return jsonify({'message': 'If an account with that email exists, a password reset link has been sent.'}), 200
+        
+        token = secrets.token_urlsafe(32)
+        expires_at = datetime.utcnow() + timedelta(hours=1)
+        
+        reset_token = PasswordResetToken(
+            user_id=user.id,
+            token=token,
+            expires_at=expires_at
+        )
+        
+        db.session.add(reset_token)
+        db.session.commit()
+        
+        # Send reset email in background thread
+        def send_email_background():
+            try:
+                with app.app_context():
+                    send_password_reset_email(user, token)
+                    print(f"✅ Reset email sent to {user.email}")
+            except Exception as e:
+                print(f"❌ Failed to send reset email: {e}")
+        
+        thread = Thread(target=send_email_background)
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'message': 'If an account with that email exists, a password reset link has been sent.'
+        }), 200
+    except Exception as e:
+        print(f"❌ Forgot password error: {e}")
+        return jsonify({'error': 'Request failed'}), 500
 
 @app.route('/api/v1/auth/reset-password', methods=['POST'])
 def reset_password():
-    data = request.json
-    token = data.get('token')
-    new_password = data.get('password')
-    
-    if not token or not new_password:
-        return jsonify({'error': 'Token and new password are required'}), 400
-    
-    reset_token = PasswordResetToken.query.filter_by(token=token, used=False).first()
-    
-    if not reset_token:
-        return jsonify({'error': 'Invalid or expired reset token'}), 400
-    
-    if reset_token.expires_at < datetime.utcnow():
-        return jsonify({'error': 'Reset token has expired'}), 400
-    
-    user = reset_token.user
-    user.password_hash = hash_password(new_password)
-    reset_token.used = True
-    
-    db.session.commit()
-    
-    return jsonify({'message': 'Password successfully reset'}), 200
+    try:
+        data = request.json
+        token = data.get('token')
+        new_password = data.get('password')
+        
+        if not token or not new_password:
+            return jsonify({'error': 'Token and new password are required'}), 400
+        
+        reset_token = PasswordResetToken.query.filter_by(token=token, used=False).first()
+        
+        if not reset_token:
+            return jsonify({'error': 'Invalid or expired reset token'}), 400
+        
+        if reset_token.expires_at < datetime.utcnow():
+            return jsonify({'error': 'Reset token has expired'}), 400
+        
+        user = reset_token.user
+        user.password_hash = hash_password(new_password)
+        reset_token.used = True
+        
+        db.session.commit()
+        
+        return jsonify({'message': 'Password successfully reset'}), 200
+    except Exception as e:
+        print(f"❌ Reset password error: {e}")
+        return jsonify({'error': 'Reset failed'}), 500
 
 @app.route('/api/v1/auth/verify-reset-token/<token>', methods=['GET'])
 def verify_reset_token(token):
-    reset_token = PasswordResetToken.query.filter_by(token=token, used=False).first()
-    
-    if not reset_token:
-        return jsonify({'valid': False, 'error': 'Invalid token'}), 400
-    
-    if reset_token.expires_at < datetime.utcnow():
-        return jsonify({'valid': False, 'error': 'Token expired'}), 400
-    
-    return jsonify({
-        'valid': True,
-        'username': reset_token.user.username,
-        'email': reset_token.user.email
-    }), 200
+    try:
+        reset_token = PasswordResetToken.query.filter_by(token=token, used=False).first()
+        
+        if not reset_token:
+            return jsonify({'valid': False, 'error': 'Invalid token'}), 400
+        
+        if reset_token.expires_at < datetime.utcnow():
+            return jsonify({'valid': False, 'error': 'Token expired'}), 400
+        
+        return jsonify({
+            'valid': True,
+            'username': reset_token.user.username,
+            'email': reset_token.user.email
+        }), 200
+    except Exception as e:
+        print(f"❌ Verify token error: {e}")
+        return jsonify({'error': 'Verification failed'}), 500
 
 @app.route('/api/v1/colleges')
 def get_colleges():
-    return jsonify([c.to_dict() for c in College.query.all()])
+    try:
+        return jsonify([c.to_dict() for c in College.query.all()])
+    except Exception as e:
+        print(f"❌ Get colleges error: {e}")
+        return jsonify({'error': 'Failed to fetch colleges'}), 500
 
 @app.route('/api/v1/locations')
 def get_locations():
-    return jsonify([l.to_dict() for l in Location.query.all()])
+    try:
+        locations = Location.query.all()
+        return jsonify([l.to_dict() for l in locations])
+    except Exception as e:
+        print(f"❌ Get locations error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to fetch locations'}), 500
 
 @app.route('/api/v1/locations/<int:location_id>', methods=['GET'])
 def get_location_details(location_id):
-    location = Location.query.get_or_404(location_id)
-    
-    # Get active posts (not expired)
-    now = datetime.utcnow()
-    posts = LocationPost.query.filter_by(location_id=location_id).all()
-    
-    active_posts = []
-    for post in posts:
-        # Check if temporary post is expired
-        if post.post_type == 'temporary' and post.expires_at and post.expires_at < now:
-            post.status = 'expired'
-            continue
+    try:
+        location = Location.query.get_or_404(location_id)
         
-        # Only show approved or auto-approved posts
-        if post.status == 'approved':
-            active_posts.append(post.to_dict())
-    
-    db.session.commit()
-    
-    return jsonify({
-        'location': location.to_dict(),
-        'posts': active_posts
-    })
+        now = datetime.utcnow()
+        posts = LocationPost.query.filter_by(location_id=location_id).all()
+        
+        active_posts = []
+        for post in posts:
+            if post.post_type == 'temporary' and post.expires_at and post.expires_at < now:
+                post.status = 'expired'
+                continue
+            
+            if post.status == 'approved':
+                active_posts.append(post.to_dict())
+        
+        db.session.commit()
+        
+        return jsonify({
+            'location': location.to_dict(),
+            'posts': active_posts
+        })
+    except Exception as e:
+        print(f"❌ Get location details error: {e}")
+        return jsonify({'error': 'Failed to fetch location'}), 500
 
 @app.route('/api/v1/locations/<int:location_id>/posts', methods=['POST'])
 def create_location_post():
-    data = request.json
-    location_id = data.get('location_id')
-    content = data.get('content')
-    post_type = data.get('post_type', 'temporary')
-    
-    if not content:
-        return jsonify({'error': 'Content is required'}), 400
-    
-    # Create post
-    new_post = LocationPost(
-        location_id=location_id,
-        content=content,
-        post_type=post_type,
-        created_by='Anonymous'
-    )
-    
-    # Temporary posts: auto-approve and expire in 3 hours
-    if post_type == 'temporary':
-        new_post.status = 'approved'
-        new_post.expires_at = datetime.utcnow() + timedelta(hours=3)
-    else:
-        # Permanent posts: need admin approval
-        new_post.status = 'pending'
-    
-    db.session.add(new_post)
-    db.session.commit()
-    
-    return jsonify(new_post.to_dict()), 201
+    try:
+        data = request.json
+        location_id = data.get('location_id')
+        content = data.get('content')
+        post_type = data.get('post_type', 'temporary')
+        
+        if not content:
+            return jsonify({'error': 'Content is required'}), 400
+        
+        new_post = LocationPost(
+            location_id=location_id,
+            content=content,
+            post_type=post_type,
+            created_by='Anonymous'
+        )
+        
+        if post_type == 'temporary':
+            new_post.status = 'approved'
+            new_post.expires_at = datetime.utcnow() + timedelta(hours=3)
+        else:
+            new_post.status = 'pending'
+        
+        db.session.add(new_post)
+        db.session.commit()
+        
+        return jsonify(new_post.to_dict()), 201
+    except Exception as e:
+        print(f"❌ Create post error: {e}")
+        return jsonify({'error': 'Failed to create post'}), 500
 
 @app.route('/api/v1/posts/pending', methods=['GET'])
 def get_pending_posts():
-    pending = LocationPost.query.filter_by(post_type='permanent', status='pending').all()
-    return jsonify([p.to_dict() for p in pending])
+    try:
+        pending = LocationPost.query.filter_by(post_type='permanent', status='pending').all()
+        return jsonify([p.to_dict() for p in pending])
+    except Exception as e:
+        print(f"❌ Get pending posts error: {e}")
+        return jsonify({'error': 'Failed to fetch posts'}), 500
 
 @app.route('/api/v1/posts/<int:post_id>/approve', methods=['PATCH'])
 def approve_post(post_id):
-    post = LocationPost.query.get_or_404(post_id)
-    post.status = 'approved'
-    db.session.commit()
-    return jsonify(post.to_dict())
+    try:
+        post = LocationPost.query.get_or_404(post_id)
+        post.status = 'approved'
+        db.session.commit()
+        return jsonify(post.to_dict())
+    except Exception as e:
+        print(f"❌ Approve post error: {e}")
+        return jsonify({'error': 'Failed to approve post'}), 500
 
 @app.route('/api/v1/posts/<int:post_id>', methods=['DELETE'])
 def delete_post(post_id):
-    post = LocationPost.query.get_or_404(post_id)
-    db.session.delete(post)
-    db.session.commit()
-    return jsonify({'message': 'Post deleted'}), 200
+    try:
+        post = LocationPost.query.get_or_404(post_id)
+        db.session.delete(post)
+        db.session.commit()
+        return jsonify({'message': 'Post deleted'}), 200
+    except Exception as e:
+        print(f"❌ Delete post error: {e}")
+        return jsonify({'error': 'Failed to delete post'}), 500
 
 @app.route('/api/v1/events')
 def get_events():
-    return jsonify([e.to_dict() for e in Event.query.all()])
+    try:
+        events = Event.query.all()
+        return jsonify([e.to_dict() for e in events])
+    except Exception as e:
+        print(f"❌ Get events error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to fetch events'}), 500
 
 @app.route('/api/v1/events', methods=['POST'])
 def create_event():
-    data = request.json
-    event = Event(
-        title=data['title'],
-        event_type=data['event_type'],
-        date_time=data.get('date_time', ''),
-        event_date=data.get('event_date'),
-        event_time=data.get('event_time'),
-        location_id=data.get('location_id'),
-        description=data.get('description'),
-        status=data.get('status', 'pending'),
-        created_by=data.get('created_by', 'anonymous')
-    )
-    db.session.add(event)
-    db.session.commit()
-    return jsonify(event.to_dict()), 201
+    try:
+        data = request.json
+        event = Event(
+            title=data['title'],
+            event_type=data['event_type'],
+            date_time=data.get('date_time', ''),
+            event_date=data.get('event_date'),
+            event_time=data.get('event_time'),
+            location_id=data.get('location_id'),
+            description=data.get('description'),
+            status=data.get('status', 'pending'),
+            created_by=data.get('created_by', 'anonymous')
+        )
+        db.session.add(event)
+        db.session.commit()
+        return jsonify(event.to_dict()), 201
+    except Exception as e:
+        print(f"❌ Create event error: {e}")
+        return jsonify({'error': 'Failed to create event'}), 500
 
 @app.route('/api/v1/starred', methods=['GET'])
 def get_starred():
-    user_id = request.args.get('user_id')
-    if not user_id:
-        return jsonify([])
-    
-    starred = StarredItem.query.filter_by(user_id=user_id).all()
-    return jsonify([s.to_dict() for s in starred])
+    try:
+        user_id = request.args.get('user_id')
+        if not user_id:
+            return jsonify([])
+        
+        starred = StarredItem.query.filter_by(user_id=user_id).all()
+        return jsonify([s.to_dict() for s in starred])
+    except Exception as e:
+        print(f"❌ Get starred error: {e}")
+        return jsonify({'error': 'Failed to fetch starred items'}), 500
 
 @app.route('/api/v1/starred', methods=['POST'])
 def add_starred():
-    data = request.json
-    
-    existing = StarredItem.query.filter_by(
-        user_id=data['user_id'],
-        item_type=data['item_type'],
-        item_id=data['item_id']
-    ).first()
-    
-    if existing:
-        return jsonify({'message': 'Already starred'}), 200
-    
-    starred = StarredItem(
-        user_id=data['user_id'],
-        item_type=data['item_type'],
-        item_id=data['item_id']
-    )
-    db.session.add(starred)
-    db.session.commit()
-    return jsonify(starred.to_dict()), 201
+    try:
+        data = request.json
+        
+        existing = StarredItem.query.filter_by(
+            user_id=data['user_id'],
+            item_type=data['item_type'],
+            item_id=data['item_id']
+        ).first()
+        
+        if existing:
+            return jsonify({'message': 'Already starred'}), 200
+        
+        starred = StarredItem(
+            user_id=data['user_id'],
+            item_type=data['item_type'],
+            item_id=data['item_id']
+        )
+        db.session.add(starred)
+        db.session.commit()
+        return jsonify(starred.to_dict()), 201
+    except Exception as e:
+        print(f"❌ Add starred error: {e}")
+        return jsonify({'error': 'Failed to star item'}), 500
 
 @app.route('/api/v1/starred/<int:starred_id>', methods=['DELETE'])
 def remove_starred(starred_id):
-    starred = StarredItem.query.get_or_404(starred_id)
-    db.session.delete(starred)
-    db.session.commit()
-    return jsonify({'message': 'Unstarred'}), 200
+    try:
+        starred = StarredItem.query.get_or_404(starred_id)
+        db.session.delete(starred)
+        db.session.commit()
+        return jsonify({'message': 'Unstarred'}), 200
+    except Exception as e:
+        print(f"❌ Remove starred error: {e}")
+        return jsonify({'error': 'Failed to unstar item'}), 500
 
 @app.route('/api/v1/events/<int:event_id>', methods=['PATCH'])
 def update_event(event_id):
-    event = Event.query.get_or_404(event_id)
-    data = request.json
-    
-    if 'status' in data:
-        event.status = data['status']
-    
-    db.session.commit()
-    return jsonify(event.to_dict())
+    try:
+        event = Event.query.get_or_404(event_id)
+        data = request.json
+        
+        if 'status' in data:
+            event.status = data['status']
+        
+        db.session.commit()
+        return jsonify(event.to_dict())
+    except Exception as e:
+        print(f"❌ Update event error: {e}")
+        return jsonify({'error': 'Failed to update event'}), 500
 
 @app.route('/api/v1/events/<int:event_id>', methods=['DELETE'])
 def delete_event(event_id):
-    event = Event.query.get_or_404(event_id)
-    db.session.delete(event)
-    db.session.commit()
-    return jsonify({'message': 'Event deleted'}), 200
+    try:
+        event = Event.query.get_or_404(event_id)
+        db.session.delete(event)
+        db.session.commit()
+        return jsonify({'message': 'Event deleted'}), 200
+    except Exception as e:
+        print(f"❌ Delete event error: {e}")
+        return jsonify({'error': 'Failed to delete event'}), 500
 
 @app.route('/api/v1/courses')
 def get_courses():
     return jsonify([])
 
 def init_db():
-    # Create all tables if they don't exist
-    db.create_all()
-    
-    # Check if we need to initialize data
-    if College.query.count() > 0:
-        print("Database already initialized")
-        return
-    
-    print("Initializing database...")
-    
-    admin = User(
-        username='admin',
-        password_hash=hash_password('admin123'),
-        name='Admin User',
-        email='admin@chizu.app',
-        role='admin',
-        college='Pomona College'
-    )
-    db.session.add(admin)
-    
-    student = User(
-        username='student',
-        password_hash=hash_password('student123'),
-        name='Demo Student',
-        email='student@chizu.app',
-        role='student',
-        college='Claremont McKenna College'
-    )
-    db.session.add(student)
-    
-    colleges = [
-        College(name="Pomona College", code="PO"),
-        College(name="Claremont McKenna College", code="CMC"),
-        College(name="Scripps College", code="SC"),
-        College(name="Harvey Mudd College", code="HMC"),
-        College(name="Pitzer College", code="PZ")
-    ]
-    
-    for c in colleges:
-        db.session.add(c)
-    db.session.commit()
-    
-    locations = [
-        Location(name="Frank Dining Hall", latitude=34.0975, longitude=-117.7080, category="dining", college_id=1, 
-                description="Main dining hall at Pomona College", 
-                fun_facts='["Open 7am-9pm daily", "Has vegan options", "Great breakfast burritos"]'),
-        Location(name="Frary Dining Hall", latitude=34.0970, longitude=-117.7075, category="dining", college_id=1,
-                description="Historic dining hall with beautiful architecture", 
-                fun_facts='["Built in 1929", "Features murals by Jose Clemente Orozco", "Known for themed dinners"]'),
-        Location(name="Collins Dining Hall", latitude=34.1018148, longitude=-117.709251, category="dining", college_id=2,
-                description="CMC dining hall", 
-                fun_facts='["Modern facility", "Wide variety of food stations"]'),
-        Location(name="Malott Commons", latitude=34.1018, longitude=-117.7055, category="dining", college_id=3,
-                description="Scripps dining commons", 
-                fun_facts='["Beautiful garden views", "Fresh salad bar"]'),
-        Location(name="Hoch-Shanahan Dining Commons", latitude=34.1055982, longitude=-117.7091323, category="dining", college_id=4,
-                description="Harvey Mudd dining hall", 
-                fun_facts='["Late night snacks available", "Popular study spot"]'),
-        Location(name="McConnell Dining Hall", latitude=34.102886, longitude=-117.7059549, category="dining", college_id=5,
-                description="Pitzer dining hall", 
-                fun_facts='["Sustainable food practices", "Vegetarian-friendly"]'),
-        Location(name="The Coop", latitude=34.0965, longitude=-117.7082, category="dining", college_id=1,
-                description="Campus store and café", 
-                fun_facts='["Quick snacks and drinks", "Student hangout spot"]'),
-        Location(name="Rains Center", latitude=34.0960, longitude=-117.7065, category="recreation", college_id=1,
-                description="Athletic and recreation center at Pomona", 
-                fun_facts='["Two basketball courts", "Indoor swimming pool", "Rock climbing wall", "Full fitness center with cardio and weights"]'),
-        Location(name="Ducey Gymnasium", latitude=34.0955, longitude=-117.7100, category="recreation", college_id=2,
-                description="CMC athletic facility", 
-                fun_facts='["Basketball courts", "Weight room", "Group fitness classes"]'),
-        Location(name="Voelkel Gym", latitude=34.1022, longitude=-117.7050, category="recreation", college_id=3,
-                description="Scripps athletics center", 
-                fun_facts='["Yoga studio", "Dance studio", "Outdoor pool"]'),
-        Location(name="Seaver North", latitude=34.0980, longitude=-117.7070, category="academic", college_id=1,
-                description="Science building at Pomona", 
-                fun_facts='["State-of-the-art science labs", "Research facilities"]'),
-        Location(name="Seaver South", latitude=34.0978, longitude=-117.7068, category="academic", college_id=1,
-                description="Academic building", 
-                fun_facts='["Lecture halls", "Study spaces"]'),
-        Location(name="Carnegie Hall", latitude=34.0968, longitude=-117.7077, category="academic", college_id=1,
-                description="Humanities building", 
-                fun_facts='["Beautiful historic architecture", "Language labs"]'),
-        Location(name="Kravis Center", latitude=34.0948, longitude=-117.7090, category="academic", college_id=2,
-                description="CMC's main academic building", 
-                fun_facts='["Modern classrooms", "Leadership institute"]'),
-        Location(name="Parsons Engineering", latitude=34.1065, longitude=-117.7092, category="academic", college_id=4,
-                description="Harvey Mudd engineering building", 
-                fun_facts='["Maker space", "Engineering labs", "Senior design projects"]'),
-        Location(name="Bridges Auditorium", latitude=34.0969, longitude=-117.7073, category="events", college_id=1,
-                description="Large performance venue", 
-                fun_facts='["Seats 2,500 people", "Hosts concerts and lectures", "Beautiful acoustics"]'),
-    ]
-    
-    for l in locations:
-        db.session.add(l)
-    db.session.commit()
-    
-    events = [
-        Event(title="Welcome Week", event_type="fun", 
-              date_time="Oct 15, 2024 at 6:00 PM",
-              event_date="2024-10-15",
-              event_time="6:00 PM",
-              location_id=1, description="Welcome new students!", status="approved", created_by="admin"),
-        Event(title="Career Fair", event_type="career", 
-              date_time="Oct 20, 2024 at 2:00 PM",
-              event_date="2024-10-20",
-              event_time="2:00 PM",
-              location_id=16, description="Meet employers", status="approved", created_by="admin"),
-        Event(title="Movie Night", event_type="fun", 
-              date_time="Oct 25, 2024 at 8:00 PM",
-              event_date="2024-10-25",
-              event_time="8:00 PM",
-              location_id=16, description="Free popcorn!", status="pending", created_by="student"),
-    ]
-    
-    for e in events:
-        db.session.add(e)
-    db.session.commit()
-    
-    print(f"✅ Database initialized with {len(locations)} locations and {len(events)} events")
+    """Initialize database with sample data"""
+    with app.app_context():
+        # Create tables
+        db.create_all()
+        print("✅ Database tables created")
+        
+        # Check if already initialized
+        if College.query.count() > 0:
+            print("✅ Database already has data")
+            return
+        
+        print("🔄 Initializing database with sample data...")
+        
+        # Create admin user
+        admin = User(
+            username='admin',
+            password_hash=hash_password('admin123'),
+            name='Admin User',
+            email='admin@chizu.app',
+            role='admin',
+            college='Pomona College'
+        )
+        db.session.add(admin)
+        
+        # Create student user
+        student = User(
+            username='student',
+            password_hash=hash_password('student123'),
+            name='Demo Student',
+            email='student@chizu.app',
+            role='student',
+            college='Claremont McKenna College'
+        )
+        db.session.add(student)
+        
+        # Create colleges
+        colleges = [
+            College(name="Pomona College", code="PO"),
+            College(name="Claremont McKenna College", code="CMC"),
+            College(name="Scripps College", code="SC"),
+            College(name="Harvey Mudd College", code="HMC"),
+            College(name="Pitzer College", code="PZ")
+        ]
+        
+        for c in colleges:
+            db.session.add(c)
+        db.session.commit()
+        
+        # Create locations
+        locations = [
+            Location(name="Frank Dining Hall", latitude=34.0975, longitude=-117.7080, category="dining", college_id=1, 
+                    description="Main dining hall at Pomona College", 
+                    fun_facts='["Open 7am-9pm daily", "Has vegan options", "Great breakfast burritos"]'),
+            Location(name="Frary Dining Hall", latitude=34.0970, longitude=-117.7075, category="dining", college_id=1,
+                    description="Historic dining hall with beautiful architecture", 
+                    fun_facts='["Built in 1929", "Features murals by Jose Clemente Orozco", "Known for themed dinners"]'),
+            Location(name="Collins Dining Hall", latitude=34.1018148, longitude=-117.709251, category="dining", college_id=2,
+                    description="CMC dining hall", 
+                    fun_facts='["Modern facility", "Wide variety of food stations"]'),
+            Location(name="Malott Commons", latitude=34.1018, longitude=-117.7055, category="dining", college_id=3,
+                    description="Scripps dining commons", 
+                    fun_facts='["Beautiful garden views", "Fresh salad bar"]'),
+            Location(name="Hoch-Shanahan Dining Commons", latitude=34.1055982, longitude=-117.7091323, category="dining", college_id=4,
+                    description="Harvey Mudd dining hall", 
+                    fun_facts='["Late night snacks available", "Popular study spot"]'),
+            Location(name="McConnell Dining Hall", latitude=34.102886, longitude=-117.7059549, category="dining", college_id=5,
+                    description="Pitzer dining hall", 
+                    fun_facts='["Sustainable food practices", "Vegetarian-friendly"]'),
+            Location(name="The Coop", latitude=34.0965, longitude=-117.7082, category="dining", college_id=1,
+                    description="Campus store and café", 
+                    fun_facts='["Quick snacks and drinks", "Student hangout spot"]'),
+            Location(name="Rains Center", latitude=34.0960, longitude=-117.7065, category="recreation", college_id=1,
+                    description="Athletic and recreation center at Pomona", 
+                    fun_facts='["Two basketball courts", "Indoor swimming pool", "Rock climbing wall", "Full fitness center with cardio and weights"]'),
+            Location(name="Ducey Gymnasium", latitude=34.0955, longitude=-117.7100, category="recreation", college_id=2,
+                    description="CMC athletic facility", 
+                    fun_facts='["Basketball courts", "Weight room", "Group fitness classes"]'),
+            Location(name="Voelkel Gym", latitude=34.1022, longitude=-117.7050, category="recreation", college_id=3,
+                    description="Scripps athletics center", 
+                    fun_facts='["Yoga studio", "Dance studio", "Outdoor pool"]'),
+            Location(name="Seaver North", latitude=34.0980, longitude=-117.7070, category="academic", college_id=1,
+                    description="Science building at Pomona", 
+                    fun_facts='["State-of-the-art science labs", "Research facilities"]'),
+            Location(name="Seaver South", latitude=34.0978, longitude=-117.7068, category="academic", college_id=1,
+                    description="Academic building", 
+                    fun_facts='["Lecture halls", "Study spaces"]'),
+            Location(name="Carnegie Hall", latitude=34.0968, longitude=-117.7077, category="academic", college_id=1,
+                    description="Humanities building", 
+                    fun_facts='["Beautiful historic architecture", "Language labs"]'),
+            Location(name="Kravis Center", latitude=34.0948, longitude=-117.7090, category="academic", college_id=2,
+                    description="CMC's main academic building", 
+                    fun_facts='["Modern classrooms", "Leadership institute"]'),
+            Location(name="Parsons Engineering", latitude=34.1065, longitude=-117.7092, category="academic", college_id=4,
+                    description="Harvey Mudd engineering building", 
+                    fun_facts='["Maker space", "Engineering labs", "Senior design projects"]'),
+            Location(name="Bridges Auditorium", latitude=34.0969, longitude=-117.7073, category="events", college_id=1,
+                    description="Large performance venue", 
+                    fun_facts='["Seats 2,500 people", "Hosts concerts and lectures", "Beautiful acoustics"]'),
+        ]
+        
+        for l in locations:
+            db.session.add(l)
+        db.session.commit()
+        
+        # Create sample events
+        events = [
+            Event(title="Welcome Week", event_type="fun", 
+                  date_time="Oct 15, 2024 at 6:00 PM",
+                  event_date="2024-10-15",
+                  event_time="6:00 PM",
+                  location_id=1, description="Welcome new students!", status="approved", created_by="admin"),
+            Event(title="Career Fair", event_type="career", 
+                  date_time="Oct 20, 2024 at 2:00 PM",
+                  event_date="2024-10-20",
+                  event_time="2:00 PM",
+                  location_id=16, description="Meet employers", status="approved", created_by="admin"),
+            Event(title="Movie Night", event_type="fun", 
+                  date_time="Oct 25, 2024 at 8:00 PM",
+                  event_date="2024-10-25",
+                  event_time="8:00 PM",
+                  location_id=16, description="Free popcorn!", status="pending", created_by="student"),
+        ]
+        
+        for e in events:
+            db.session.add(e)
+        db.session.commit()
+        
+        print(f"✅ Database initialized with {len(locations)} locations and {len(events)} events")
 
 if __name__ == '__main__':
-    with app.app_context():
-        init_db()
+    # Initialize database only if it doesn't exist or is empty
+    init_db()
+    
+    # Get port from environment or use 8080
     port = int(os.environ.get('PORT', 8080))
+    
+    # Run the app
+    print(f"🚀 Starting Chizu backend on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
