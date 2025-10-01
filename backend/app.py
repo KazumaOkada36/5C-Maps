@@ -644,6 +644,7 @@ def init_db():
             os.remove(db_path)
         
         # Create tables
+        db.drop_all()
         db.create_all()
         print("✅ Database tables created")
         
@@ -769,7 +770,7 @@ def init_db():
         db.session.commit()
         
         print(f"✅ Database initialized with {len(locations)} locations and {len(events)} events")
-        
+
 if __name__ == '__main__':
     # Initialize database only if it doesn't exist or is empty
     init_db()
