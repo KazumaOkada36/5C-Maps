@@ -636,6 +636,13 @@ def get_courses():
 def init_db():
     """Initialize database with sample data"""
     with app.app_context():
+        # NUCLEAR OPTION: Drop and recreate ONCE
+        import os
+        db_path = 'instance/5c_maps.db'
+        if os.path.exists(db_path):
+            print("🔥 Deleting old database file...")
+            os.remove(db_path)
+        
         # Create tables
         db.create_all()
         print("✅ Database tables created")
@@ -762,7 +769,7 @@ def init_db():
         db.session.commit()
         
         print(f"✅ Database initialized with {len(locations)} locations and {len(events)} events")
-
+        
 if __name__ == '__main__':
     # Initialize database only if it doesn't exist or is empty
     init_db()
