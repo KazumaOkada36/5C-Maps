@@ -8,6 +8,7 @@ import secrets
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from threading import Thread
 
 app = Flask(__name__)
 CORS(app)
@@ -320,13 +321,22 @@ def register():
     db.session.add(new_user)
     db.session.commit()
     
-    # Send welcome email
-    email_sent = send_welcome_email(new_user, password)
+    # Send welcome email in background thread (won't block response)
+    def send_email_background():
+        try:
+            with app.app_context():
+                send_welcome_email(new_user, password)
+                print(f"✅ Welcome email sent to {new_user.email}")
+        except Exception as e:
+            print(f"❌ Failed to send welcome email: {e}")
+    
+    thread = Thread(target=send_email_background)
+    thread.daemon = True
+    thread.start()
     
     return jsonify({
-        'message': 'Account created successfully!',
-        'user': new_user.to_dict(),
-        'email_sent': email_sent
+        'message': 'Account created successfully! Check your email for credentials.',
+        'user': new_user.to_dict()
     }), 201
 
 @app.route('/api/v1/auth/login', methods=['POST'])
@@ -356,7 +366,6 @@ def forgot_password():
     user = User.query.filter_by(email=email).first()
     
     if not user:
-        # Don't reveal if email exists for security
         return jsonify({'message': 'If an account with that email exists, a password reset link has been sent.'}), 200
     
     # Generate reset token
@@ -372,12 +381,21 @@ def forgot_password():
     db.session.add(reset_token)
     db.session.commit()
     
-    # Send reset email
-    email_sent = send_password_reset_email(user, token)
+    # Send reset email in background thread
+    def send_email_background():
+        try:
+            with app.app_context():
+                send_password_reset_email(user, token)
+                print(f"✅ Reset email sent to {user.email}")
+        except Exception as e:
+            print(f"❌ Failed to send reset email: {e}")
+    
+    thread = Thread(target=send_email_background)
+    thread.daemon = True
+    thread.start()
     
     return jsonify({
-        'message': 'If an account with that email exists, a password reset link has been sent.',
-        'email_sent': email_sent
+        'message': 'If an account with that email exists, a password reset link has been sent.'
     }), 200
 
 @app.route('/api/v1/auth/reset-password', methods=['POST'])
