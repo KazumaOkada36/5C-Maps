@@ -558,11 +558,9 @@ def get_courses():
     return jsonify([])
 
 def init_db():
+    # Drop all tables and recreate (ONLY for development!)
+    db.drop_all()
     db.create_all()
-    
-    if College.query.count() > 0:
-        print("Database already initialized")
-        return
     
     print("Initializing database...")
     
@@ -600,20 +598,82 @@ def init_db():
     
     locations = [
         Location(name="Frank Dining Hall", latitude=34.0975, longitude=-117.7080, category="dining", college_id=1, 
-                description="Main dining hall at Pomona", fun_facts='["Open 7am-9pm daily", "Has vegan options", "Great breakfast burritos"]'),
+                description="Main dining hall at Pomona College", 
+                fun_facts='["Open 7am-9pm daily", "Has vegan options", "Great breakfast burritos"]'),
         Location(name="Frary Dining Hall", latitude=34.0970, longitude=-117.7075, category="dining", college_id=1,
-                description="Historic dining hall", fun_facts='["Built in 1929", "Features murals by Jose Clemente Orozco"]'),
+                description="Historic dining hall with beautiful architecture", 
+                fun_facts='["Built in 1929", "Features murals by Jose Clemente Orozco", "Known for themed dinners"]'),
+        Location(name="Collins Dining Hall", latitude=34.1018148, longitude=-117.709251, category="dining", college_id=2,
+                description="CMC dining hall", 
+                fun_facts='["Modern facility", "Wide variety of food stations"]'),
+        Location(name="Malott Commons", latitude=34.1018, longitude=-117.7055, category="dining", college_id=3,
+                description="Scripps dining commons", 
+                fun_facts='["Beautiful garden views", "Fresh salad bar"]'),
+        Location(name="Hoch-Shanahan Dining Commons", latitude=34.1055982, longitude=-117.7091323, category="dining", college_id=4,
+                description="Harvey Mudd dining hall", 
+                fun_facts='["Late night snacks available", "Popular study spot"]'),
+        Location(name="McConnell Dining Hall", latitude=34.102886, longitude=-117.7059549, category="dining", college_id=5,
+                description="Pitzer dining hall", 
+                fun_facts='["Sustainable food practices", "Vegetarian-friendly"]'),
+        Location(name="The Coop", latitude=34.0965, longitude=-117.7082, category="dining", college_id=1,
+                description="Campus store and café", 
+                fun_facts='["Quick snacks and drinks", "Student hangout spot"]'),
         Location(name="Rains Center", latitude=34.0960, longitude=-117.7065, category="recreation", college_id=1,
-                description="Athletic and recreation center", fun_facts='["Two basketball courts", "Indoor pool", "Rock climbing wall", "Fitness center"]'),
+                description="Athletic and recreation center at Pomona", 
+                fun_facts='["Two basketball courts", "Indoor swimming pool", "Rock climbing wall", "Full fitness center with cardio and weights"]'),
+        Location(name="Ducey Gymnasium", latitude=34.0955, longitude=-117.7100, category="recreation", college_id=2,
+                description="CMC athletic facility", 
+                fun_facts='["Basketball courts", "Weight room", "Group fitness classes"]'),
+        Location(name="Voelkel Gym", latitude=34.1022, longitude=-117.7050, category="recreation", college_id=3,
+                description="Scripps athletics center", 
+                fun_facts='["Yoga studio", "Dance studio", "Outdoor pool"]'),
         Location(name="Seaver North", latitude=34.0980, longitude=-117.7070, category="academic", college_id=1,
-                description="Academic building", fun_facts='["Houses science departments", "State-of-the-art labs"]'),
+                description="Science building at Pomona", 
+                fun_facts='["State-of-the-art science labs", "Research facilities"]'),
+        Location(name="Seaver South", latitude=34.0978, longitude=-117.7068, category="academic", college_id=1,
+                description="Academic building", 
+                fun_facts='["Lecture halls", "Study spaces"]'),
+        Location(name="Carnegie Hall", latitude=34.0968, longitude=-117.7077, category="academic", college_id=1,
+                description="Humanities building", 
+                fun_facts='["Beautiful historic architecture", "Language labs"]'),
+        Location(name="Kravis Center", latitude=34.0948, longitude=-117.7090, category="academic", college_id=2,
+                description="CMC's main academic building", 
+                fun_facts='["Modern classrooms", "Leadership institute"]'),
+        Location(name="Parsons Engineering", latitude=34.1065, longitude=-117.7092, category="academic", college_id=4,
+                description="Harvey Mudd engineering building", 
+                fun_facts='["Maker space", "Engineering labs", "Senior design projects"]'),
+        Location(name="Bridges Auditorium", latitude=34.0969, longitude=-117.7073, category="events", college_id=1,
+                description="Large performance venue", 
+                fun_facts='["Seats 2,500 people", "Hosts concerts and lectures", "Beautiful acoustics"]'),
     ]
     
     for l in locations:
         db.session.add(l)
     db.session.commit()
     
-    print(f"✅ Database initialized")
+    events = [
+        Event(title="Welcome Week", event_type="fun", 
+              date_time="Oct 15, 2024 at 6:00 PM",
+              event_date="2024-10-15",
+              event_time="6:00 PM",
+              location_id=1, description="Welcome new students!", status="approved", created_by="admin"),
+        Event(title="Career Fair", event_type="career", 
+              date_time="Oct 20, 2024 at 2:00 PM",
+              event_date="2024-10-20",
+              event_time="2:00 PM",
+              location_id=16, description="Meet employers", status="approved", created_by="admin"),
+        Event(title="Movie Night", event_type="fun", 
+              date_time="Oct 25, 2024 at 8:00 PM",
+              event_date="2024-10-25",
+              event_time="8:00 PM",
+              location_id=16, description="Free popcorn!", status="pending", created_by="student"),
+    ]
+    
+    for e in events:
+        db.session.add(e)
+    db.session.commit()
+    
+    print(f"✅ Database initialized with {len(locations)} locations and {len(events)} events")
 
 if __name__ == '__main__':
     with app.app_context():
