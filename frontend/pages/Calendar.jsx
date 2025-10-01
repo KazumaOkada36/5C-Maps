@@ -33,7 +33,7 @@ const Calendar = ({ currentUser, onClose }) => {
 
   const fetchEvents = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/v1/events');
+      const response = await fetch('https://fivec-maps.onrender.com/api/v1/events');
       const data = await response.json();
       setAllEvents(data.filter(e => e.status === 'approved'));
     } catch (err) {
@@ -43,7 +43,7 @@ const Calendar = ({ currentUser, onClose }) => {
 
   const fetchStarredEvents = async () => {
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/starred?user_id=${currentUser.id}`);
+      const response = await fetch(`https://fivec-maps.onrender.com/api/v1/starred?user_id=${currentUser.id}`);
       const data = await response.json();
       const eventStars = data.filter(s => s.item_type === 'event');
       setStarredEvents(eventStars);
