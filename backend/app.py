@@ -10,22 +10,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from threading import Thread
 
-# TEMPORARY: Force delete old database to recreate with new structure
-db_paths = [
-    '5c_maps.db',
-    'instance/5c_maps.db',
-    '/opt/render/project/src/5c_maps.db',
-    '/opt/render/project/src/instance/5c_maps.db'
-]
-
-for db_path in db_paths:
-    if os.path.exists(db_path):
-        try:
-            os.remove(db_path)
-            print(f"🗑️ Deleted old database at {db_path}")
-        except Exception as e:
-            print(f"Failed to delete {db_path}: {e}")
-
 app = Flask(__name__)
 CORS(app)
 
@@ -40,6 +24,15 @@ app.config['SMTP_PASSWORD'] = os.environ.get('SMTP_PASSWORD', '')
 app.config['FROM_EMAIL'] = os.environ.get('FROM_EMAIL', 'noreply@chizu.app')
 
 db = SQLAlchemy(app)
+
+# FORCE DATABASE RESET - Run this once to fix the issue
+with app.app_context():
+    print("🔄 Dropping all tables...")
+    db.drop_all()
+    print("✅ All tables dropped")
+    print("🔄 Creating all tables...")
+    db.create_all()
+    print("✅ All tables created")
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
