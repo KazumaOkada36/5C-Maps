@@ -771,13 +771,16 @@ def init_db():
         
         print(f"✅ Database initialized with {len(locations)} locations and {len(events)} events")
 
+# This runs ALWAYS, not just when using python directly
+with app.app_context():
+    db.create_all()
+    
+    # Only initialize data if database is empty
+    if College.query.count() == 0:
+        print("Initializing database...")
+        # Put all your initialization code here (colleges, locations, events, etc.)
+
 if __name__ == '__main__':
-    # Initialize database only if it doesn't exist or is empty
-    init_db()
-    
-    # Get port from environment or use 8080
     port = int(os.environ.get('PORT', 8080))
-    
-    # Run the app
-    print(f"🚀 Starting Chizu backend on port {port}")
+    print(f"Starting Chizu backend on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
