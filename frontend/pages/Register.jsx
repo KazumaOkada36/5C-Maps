@@ -12,6 +12,7 @@ const Register = ({ onRegister, onBackToLogin }) => {
   });
   const [colleges, setColleges] = useState([]);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     // Fetch colleges list
@@ -36,6 +37,9 @@ const Register = ({ onRegister, onBackToLogin }) => {
       return;
     }
 
+    setLoading(true);
+    console.log('Attempting registration...', formData); // DEBUG
+
     try {
       const response = await fetch('https://fivec-maps.onrender.com/api/v1/auth/register', {
         method: 'POST',
@@ -51,17 +55,21 @@ const Register = ({ onRegister, onBackToLogin }) => {
         })
       });
 
+      console.log('Response status:', response.status); // DEBUG
       const data = await response.json();
+      console.log('Response data:', data); // DEBUG
 
       if (response.ok) {
-        alert('Account created successfully! Please login.');
+        alert('✅ Account created successfully! Check your email for your login credentials.');
         onBackToLogin();
       } else {
         setError(data.error || 'Registration failed');
       }
     } catch (err) {
+      console.error('Registration error:', err); // DEBUG
       setError('Network error. Please try again.');
-      console.error('Registration error:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -92,6 +100,7 @@ const Register = ({ onRegister, onBackToLogin }) => {
               onChange={(e) => setFormData({...formData, name: e.target.value})}
               placeholder="John Doe"
               required
+              disabled={loading}
             />
           </div>
 
@@ -103,6 +112,7 @@ const Register = ({ onRegister, onBackToLogin }) => {
               onChange={(e) => setFormData({...formData, email: e.target.value})}
               placeholder="john@student.edu"
               required
+              disabled={loading}
             />
           </div>
 
@@ -115,6 +125,7 @@ const Register = ({ onRegister, onBackToLogin }) => {
               placeholder="Choose a username"
               required
               minLength="3"
+              disabled={loading}
             />
           </div>
 
@@ -124,6 +135,7 @@ const Register = ({ onRegister, onBackToLogin }) => {
               value={formData.college}
               onChange={(e) => setFormData({...formData, college: e.target.value})}
               required
+              disabled={loading}
             >
               <option value="">Select your college</option>
               {colleges.map(college => (
@@ -143,6 +155,7 @@ const Register = ({ onRegister, onBackToLogin }) => {
               placeholder="At least 6 characters"
               required
               minLength="6"
+              disabled={loading}
             />
           </div>
 
@@ -154,21 +167,27 @@ const Register = ({ onRegister, onBackToLogin }) => {
               onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
               placeholder="Re-enter your password"
               required
+              disabled={loading}
             />
           </div>
 
-          <button type="submit" className="login-btn">
-            Create Account
+          <button type="submit" className="login-btn" disabled={loading}>
+            {loading ? 'Creating Account...' : 'Create Account'}
           </button>
 
           <button 
             type="button" 
             onClick={onBackToLogin}
             className="secondary-btn"
+            disabled={loading}
           >
             ← Back to Login
           </button>
         </form>
+
+        <div className="help-text">
+          <p>📧 <strong>You'll receive an email</strong> with your username and password after registration!</p>
+        </div>
       </div>
     </div>
   );
