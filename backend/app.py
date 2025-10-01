@@ -16,7 +16,7 @@ CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///5c_maps.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Email Configuration - Set these as environment variables
+# Email Configuration
 app.config['SMTP_SERVER'] = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
 app.config['SMTP_PORT'] = int(os.environ.get('SMTP_PORT', 587))
 app.config['SMTP_USERNAME'] = os.environ.get('SMTP_USERNAME', '')
@@ -71,6 +71,8 @@ class Location(db.Model):
     longitude = db.Column(db.Float)
     category = db.Column(db.String(50))
     college_id = db.Column(db.Integer, db.ForeignKey('college.id'))
+    description = db.Column(db.String(500))
+    fun_facts = db.Column(db.Text)  # JSON string of fun facts
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     college = db.relationship('College', backref='locations')
@@ -82,7 +84,33 @@ class Location(db.Model):
             'latitude': self.latitude,
             'longitude': self.longitude,
             'category': self.category,
-            'college': self.college.name if self.college else 'Unknown'
+            'college': self.college.name if self.college else 'Unknown',
+            'description': self.description,
+            'fun_facts': self.fun_facts
+        }
+
+class LocationPost(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
+    content = db.Column(db.String(500), nullable=False)
+    post_type = db.Column(db.String(20), nullable=False)  # 'temporary' or 'permanent'
+    status = db.Column(db.String(20), default='pending')  # 'pending', 'approved', 'expired'
+    created_by = db.Column(db.String(100), default='Anonymous')
+    expires_at = db.Column(db.DateTime)  # For temporary posts
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    location = db.relationship('Location', backref='posts')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'location_id': self.location_id,
+            'content': self.content,
+            'post_type': self.post_type,
+            'status': self.status,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat(),
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None
         }
 
 class Event(db.Model):
@@ -136,17 +164,14 @@ def hash_password(password):
 def send_email(to_email, subject, html_content):
     """Send an email using SMTP"""
     try:
-        # Create message
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = app.config['FROM_EMAIL']
         msg['To'] = to_email
         
-        # Attach HTML content
         html_part = MIMEText(html_content, 'html')
         msg.attach(html_part)
         
-        # Send email
         with smtplib.SMTP(app.config['SMTP_SERVER'], app.config['SMTP_PORT']) as server:
             server.starttls()
             server.login(app.config['SMTP_USERNAME'], app.config['SMTP_PASSWORD'])
@@ -172,8 +197,6 @@ def send_welcome_email(user, password):
             .credential-item {{ margin: 10px 0; }}
             .label {{ font-weight: bold; color: #667eea; }}
             .value {{ background: #e9ecef; padding: 8px 12px; border-radius: 4px; display: inline-block; margin-left: 10px; font-family: monospace; }}
-            .footer {{ text-align: center; margin-top: 20px; color: #6c757d; font-size: 0.9em; }}
-            .button {{ display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
         </style>
     </head>
     <body>
@@ -183,7 +206,7 @@ def send_welcome_email(user, password):
             </div>
             <div class="content">
                 <h2>Hello {user.name}! 👋</h2>
-                <p>Your Chizu account has been successfully created. You can now access the 5C Campus Navigation system.</p>
+                <p>Your Chizu account has been successfully created.</p>
                 
                 <div class="credentials">
                     <h3>Your Account Credentials:</h3>
@@ -195,34 +218,7 @@ def send_welcome_email(user, password):
                         <span class="label">Password:</span>
                         <span class="value">{password}</span>
                     </div>
-                    <div class="credential-item">
-                        <span class="label">Email:</span>
-                        <span class="value">{user.email}</span>
-                    </div>
-                    <div class="credential-item">
-                        <span class="label">College:</span>
-                        <span class="value">{user.college}</span>
-                    </div>
                 </div>
-                
-                <p><strong>⚠️ Important:</strong> Please save these credentials in a safe place. We recommend changing your password after your first login.</p>
-                
-                <p>With Chizu, you can:</p>
-                <ul>
-                    <li>🗺️ Navigate the 5C campus easily</li>
-                    <li>📅 Discover and star campus events</li>
-                    <li>🍽️ Find dining halls and their menus</li>
-                    <li>📚 Manage your class schedule</li>
-                    <li>🎯 Stay connected with campus activities</li>
-                </ul>
-                
-                <div style="text-align: center;">
-                    <a href="https://5-c-maps.vercel.app" class="button">Login to Chizu</a>
-                </div>
-            </div>
-            <div class="footer">
-                <p>Powered by Chizu 🗾 | Interactive Campus Navigation</p>
-                <p>If you didn't create this account, please ignore this email.</p>
             </div>
         </div>
     </body>
@@ -233,60 +229,17 @@ def send_welcome_email(user, password):
 
 def send_password_reset_email(user, reset_token):
     """Send password reset email with token"""
-    reset_link = f"https://5-c-maps.vercel.app/reset-password?token={reset_token}"
+    reset_link = f"https://5-c-maps.vercel.app/?token={reset_token}"
     
     html_content = f"""
     <!DOCTYPE html>
     <html>
-    <head>
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-            .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
-            .content {{ background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }}
-            .info-box {{ background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }}
-            .username {{ background: #e9ecef; padding: 8px 12px; border-radius: 4px; display: inline-block; font-family: monospace; font-weight: bold; }}
-            .button {{ display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }}
-            .warning {{ background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 4px; margin: 20px 0; }}
-            .footer {{ text-align: center; margin-top: 20px; color: #6c757d; font-size: 0.9em; }}
-        </style>
-    </head>
     <body>
-        <div class="container">
-            <div class="header">
-                <h1>🔐 Password Reset Request</h1>
-            </div>
-            <div class="content">
-                <h2>Hello {user.name}!</h2>
-                <p>We received a request to reset your password for your Chizu account.</p>
-                
-                <div class="info-box">
-                    <p><strong>Your Username:</strong> <span class="username">{user.username}</span></p>
-                    <p style="margin-top: 10px; color: #6c757d; font-size: 0.9em;">Your username never changes and can be used to log in.</p>
-                </div>
-                
-                <p>Click the button below to reset your password:</p>
-                
-                <div style="text-align: center;">
-                    <a href="{reset_link}" class="button">Reset Password</a>
-                </div>
-                
-                <p style="margin-top: 20px;">Or copy and paste this link into your browser:</p>
-                <p style="background: #e9ecef; padding: 10px; border-radius: 4px; word-break: break-all; font-size: 0.9em;">{reset_link}</p>
-                
-                <div class="warning">
-                    <strong>⏰ Important:</strong> This password reset link will expire in 1 hour for security reasons.
-                </div>
-                
-                <div class="warning" style="background: #f8d7da; border-left-color: #dc3545;">
-                    <strong>⚠️ Security Notice:</strong> If you didn't request this password reset, please ignore this email. Your password will remain unchanged.
-                </div>
-            </div>
-            <div class="footer">
-                <p>Powered by Chizu 🗾 | Interactive Campus Navigation</p>
-                <p>This is an automated email. Please do not reply.</p>
-            </div>
-        </div>
+        <h1>🔐 Password Reset Request</h1>
+        <p>Hello {user.name}!</p>
+        <p><strong>Your Username:</strong> {user.username}</p>
+        <p><a href="{reset_link}">Click here to reset your password</a></p>
+        <p>This link expires in 1 hour.</p>
     </body>
     </html>
     """
@@ -321,7 +274,7 @@ def register():
     db.session.add(new_user)
     db.session.commit()
     
-    # Send welcome email in background thread (won't block response)
+    # Send welcome email in background thread
     def send_email_background():
         try:
             with app.app_context():
@@ -368,7 +321,6 @@ def forgot_password():
     if not user:
         return jsonify({'message': 'If an account with that email exists, a password reset link has been sent.'}), 200
     
-    # Generate reset token
     token = secrets.token_urlsafe(32)
     expires_at = datetime.utcnow() + timedelta(hours=1)
     
@@ -415,7 +367,6 @@ def reset_password():
     if reset_token.expires_at < datetime.utcnow():
         return jsonify({'error': 'Reset token has expired'}), 400
     
-    # Update user password
     user = reset_token.user
     user.password_hash = hash_password(new_password)
     reset_token.used = True
@@ -426,7 +377,6 @@ def reset_password():
 
 @app.route('/api/v1/auth/verify-reset-token/<token>', methods=['GET'])
 def verify_reset_token(token):
-    """Verify if a reset token is valid"""
     reset_token = PasswordResetToken.query.filter_by(token=token, used=False).first()
     
     if not reset_token:
@@ -448,6 +398,82 @@ def get_colleges():
 @app.route('/api/v1/locations')
 def get_locations():
     return jsonify([l.to_dict() for l in Location.query.all()])
+
+@app.route('/api/v1/locations/<int:location_id>', methods=['GET'])
+def get_location_details(location_id):
+    location = Location.query.get_or_404(location_id)
+    
+    # Get active posts (not expired)
+    now = datetime.utcnow()
+    posts = LocationPost.query.filter_by(location_id=location_id).all()
+    
+    active_posts = []
+    for post in posts:
+        # Check if temporary post is expired
+        if post.post_type == 'temporary' and post.expires_at and post.expires_at < now:
+            post.status = 'expired'
+            continue
+        
+        # Only show approved or auto-approved posts
+        if post.status == 'approved':
+            active_posts.append(post.to_dict())
+    
+    db.session.commit()
+    
+    return jsonify({
+        'location': location.to_dict(),
+        'posts': active_posts
+    })
+
+@app.route('/api/v1/locations/<int:location_id>/posts', methods=['POST'])
+def create_location_post():
+    data = request.json
+    location_id = data.get('location_id')
+    content = data.get('content')
+    post_type = data.get('post_type', 'temporary')
+    
+    if not content:
+        return jsonify({'error': 'Content is required'}), 400
+    
+    # Create post
+    new_post = LocationPost(
+        location_id=location_id,
+        content=content,
+        post_type=post_type,
+        created_by='Anonymous'
+    )
+    
+    # Temporary posts: auto-approve and expire in 3 hours
+    if post_type == 'temporary':
+        new_post.status = 'approved'
+        new_post.expires_at = datetime.utcnow() + timedelta(hours=3)
+    else:
+        # Permanent posts: need admin approval
+        new_post.status = 'pending'
+    
+    db.session.add(new_post)
+    db.session.commit()
+    
+    return jsonify(new_post.to_dict()), 201
+
+@app.route('/api/v1/posts/pending', methods=['GET'])
+def get_pending_posts():
+    pending = LocationPost.query.filter_by(post_type='permanent', status='pending').all()
+    return jsonify([p.to_dict() for p in pending])
+
+@app.route('/api/v1/posts/<int:post_id>/approve', methods=['PATCH'])
+def approve_post(post_id):
+    post = LocationPost.query.get_or_404(post_id)
+    post.status = 'approved'
+    db.session.commit()
+    return jsonify(post.to_dict())
+
+@app.route('/api/v1/posts/<int:post_id>', methods=['DELETE'])
+def delete_post(post_id):
+    post = LocationPost.query.get_or_404(post_id)
+    db.session.delete(post)
+    db.session.commit()
+    return jsonify({'message': 'Post deleted'}), 200
 
 @app.route('/api/v1/events')
 def get_events():
@@ -573,51 +599,21 @@ def init_db():
     db.session.commit()
     
     locations = [
-        Location(name="Frank Dining Hall", latitude=34.0975, longitude=-117.7080, category="dining", college_id=1),
-        Location(name="Frary Dining Hall", latitude=34.0970, longitude=-117.7075, category="dining", college_id=1),
-        Location(name="Collins Dining Hall", latitude=34.1018148, longitude=-117.709251, category="dining", college_id=2),
-        Location(name="Malott Commons", latitude=34.1018, longitude=-117.7055, category="dining", college_id=3),
-        Location(name="Hoch-Shanahan Dining Commons", latitude=34.1055982, longitude=-117.7091323, category="dining", college_id=4),
-        Location(name="McConnell Dining Hall", latitude=34.102886, longitude=-117.7059549, category="dining", college_id=5),
-        Location(name="The Coop", latitude=34.0965, longitude=-117.7082, category="dining", college_id=1),
-        Location(name="Rains Center", latitude=34.0960, longitude=-117.7065, category="recreation", college_id=1),
-        Location(name="Ducey Gymnasium", latitude=34.0955, longitude=-117.7100, category="recreation", college_id=2),
-        Location(name="Voelkel Gym", latitude=34.1022, longitude=-117.7050, category="recreation", college_id=3),
-        Location(name="Seaver North", latitude=34.0980, longitude=-117.7070, category="academic", college_id=1),
-        Location(name="Seaver South", latitude=34.0978, longitude=-117.7068, category="academic", college_id=1),
-        Location(name="Carnegie Hall", latitude=34.0968, longitude=-117.7077, category="academic", college_id=1),
-        Location(name="Kravis Center", latitude=34.0948, longitude=-117.7090, category="academic", college_id=2),
-        Location(name="Parsons Engineering", latitude=34.1065, longitude=-117.7092, category="academic", college_id=4),
-        Location(name="Bridges Auditorium", latitude=34.0969, longitude=-117.7073, category="events", college_id=1),
+        Location(name="Frank Dining Hall", latitude=34.0975, longitude=-117.7080, category="dining", college_id=1, 
+                description="Main dining hall at Pomona", fun_facts='["Open 7am-9pm daily", "Has vegan options", "Great breakfast burritos"]'),
+        Location(name="Frary Dining Hall", latitude=34.0970, longitude=-117.7075, category="dining", college_id=1,
+                description="Historic dining hall", fun_facts='["Built in 1929", "Features murals by Jose Clemente Orozco"]'),
+        Location(name="Rains Center", latitude=34.0960, longitude=-117.7065, category="recreation", college_id=1,
+                description="Athletic and recreation center", fun_facts='["Two basketball courts", "Indoor pool", "Rock climbing wall", "Fitness center"]'),
+        Location(name="Seaver North", latitude=34.0980, longitude=-117.7070, category="academic", college_id=1,
+                description="Academic building", fun_facts='["Houses science departments", "State-of-the-art labs"]'),
     ]
     
     for l in locations:
         db.session.add(l)
     db.session.commit()
     
-    events = [
-        Event(title="Welcome Week", event_type="fun", 
-              date_time="Oct 15, 2024 at 6:00 PM",
-              event_date="2024-10-15",
-              event_time="6:00 PM",
-              location_id=1, description="Welcome new students!", status="approved", created_by="admin"),
-        Event(title="Career Fair", event_type="career", 
-              date_time="Oct 20, 2024 at 2:00 PM",
-              event_date="2024-10-20",
-              event_time="2:00 PM",
-              location_id=16, description="Meet employers", status="approved", created_by="admin"),
-        Event(title="Movie Night", event_type="fun", 
-              date_time="Oct 25, 2024 at 8:00 PM",
-              event_date="2024-10-25",
-              event_time="8:00 PM",
-              location_id=16, description="Free popcorn!", status="pending", created_by="student"),
-    ]
-    
-    for e in events:
-        db.session.add(e)
-    db.session.commit()
-    
-    print(f"✅ Database initialized with {len(locations)} locations and {len(events)} events")
+    print(f"✅ Database initialized")
 
 if __name__ == '__main__':
     with app.app_context():

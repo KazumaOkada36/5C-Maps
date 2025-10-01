@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import '../styles/home.css';
-import Schedule from './Schedule.jsx';
 import Calendar from './Calendar.jsx';
+import LocationDetail from './LocationDetail.jsx';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -17,12 +17,13 @@ const Home = ({ currentUser, onLogout }) => {
   const [pois, setPois] = useState([]);
   const [events, setEvents] = useState([]);
   const [pendingEvents, setPendingEvents] = useState([]);
+  const [pendingPosts, setPendingPosts] = useState([]);
   const [expandedCategory, setExpandedCategory] = useState(null);
   const [expandedEventType, setExpandedEventType] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showEventForm, setShowEventForm] = useState(false);
-  const [showSchedule, setShowSchedule] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState(null);
   const [starredItems, setStarredItems] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [eventFormData, setEventFormData] = useState({
@@ -66,7 +67,9 @@ const Home = ({ currentUser, onLogout }) => {
           category: location.category || 'other',
           lat: location.latitude,
           lng: location.longitude,
-          college: location.college
+          college: location.college,
+          description: location.description,
+          fun_facts: location.fun_facts
         }));
 
         setPois(formattedPOIs);
@@ -79,6 +82,10 @@ const Home = ({ currentUser, onLogout }) => {
         if (currentUser.id) {
           fetchStarredItems();
         }
+
+        if (currentUser.role === 'admin') {
+          fetchPendingPosts();
+        }
       } catch (err) {
         console.error('Failed to fetch:', err);
       } finally {
@@ -88,6 +95,16 @@ const Home = ({ currentUser, onLogout }) => {
 
     fetchData();
   }, [currentUser]);
+
+  const fetchPendingPosts = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/posts/pending`);
+      const data = await response.json();
+      setPendingPosts(data);
+    } catch (err) {
+      console.error('Failed to fetch pending posts:', err);
+    }
+  };
 
   useEffect(() => {
     const initMap = async () => {
@@ -312,13 +329,9 @@ const Home = ({ currentUser, onLogout }) => {
   };
 
   const focusOnLocation = (poi) => {
+    setSelectedLocation(poi);
     if (mapInstanceRef.current && poi.lat && poi.lng) {
       mapInstanceRef.current.setView([poi.lat, poi.lng], 18);
-      const marker = markersRef.current.find(m => {
-        const latlng = m.getLatLng();
-        return latlng.lat === poi.lat && latlng.lng === poi.lng;
-      });
-      if (marker) marker.openPopup();
     }
   };
 
@@ -400,12 +413,46 @@ const Home = ({ currentUser, onLogout }) => {
     }
   };
 
-  const handleApproveEvent = (eventId, approved) => {
+  const handleApproveEvent = async (eventId, approved) => {
     const event = pendingEvents.find(e => e.id === eventId);
     if (approved) {
-      setEvents([...events, { ...event, status: 'approved' }]);
+      try {
+        await fetch(`${API_BASE}/events/${eventId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'approved' })
+        });
+        setEvents([...events, { ...event, status: 'approved' }]);
+      } catch (err) {
+        console.error('Failed to approve event:', err);
+      }
+    } else {
+      try {
+        await fetch(`${API_BASE}/events/${eventId}`, { method: 'DELETE' });
+      } catch (err) {
+        console.error('Failed to delete event:', err);
+      }
     }
     setPendingEvents(pendingEvents.filter(e => e.id !== eventId));
+  };
+
+  const handleApprovePost = async (postId, approved) => {
+    try {
+      if (approved) {
+        await fetch(`${API_BASE}/posts/${postId}/approve`, {
+          method: 'PATCH'
+        });
+        alert('✅ Post approved!');
+      } else {
+        await fetch(`${API_BASE}/posts/${postId}`, {
+          method: 'DELETE'
+        });
+        alert('Post rejected');
+      }
+      fetchPendingPosts();
+    } catch (err) {
+      console.error('Failed to handle post:', err);
+    }
   };
 
   if (loading) {
@@ -460,47 +507,35 @@ const Home = ({ currentUser, onLogout }) => {
           <h3 className="sidebar-title">Categories</h3>
           
           {(currentUser.role === 'student' || currentUser.role === 'guest') && (
-            <>
-              <div className="category-section">
-                <button 
-                  className="category-btn schedule-btn"
-                  onClick={() => setShowSchedule(true)}
-                >
-                  <span className="category-icon">📚</span>
-                  <span className="category-name">Class Schedule</span>
-                </button>
-              </div>
-              
-              <div className="category-section">
-                <button 
-                  className="category-btn calendar-btn"
-                  onClick={() => setShowCalendar(true)}
-                >
-                  <span className="category-icon">📅</span>
-                  <span className="category-name">My Calendar</span>
-                  {starredItems.filter(s => s.item_type === 'event').length > 0 && (
-                    <span className="category-count star-badge">
-                      {starredItems.filter(s => s.item_type === 'event').length}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </>
+            <div className="category-section">
+              <button 
+                className="category-btn calendar-btn"
+                onClick={() => setShowCalendar(true)}
+              >
+                <span className="category-icon">📅</span>
+                <span className="category-name">My Calendar</span>
+                {starredItems.filter(s => s.item_type === 'event').length > 0 && (
+                  <span className="category-count star-badge">
+                    {starredItems.filter(s => s.item_type === 'event').length}
+                  </span>
+                )}
+              </button>
+            </div>
           )}
 
           {currentUser.role === 'admin' && pendingEvents.length > 0 && (
             <div className="category-section">
               <button 
                 className="category-btn approval-btn"
-                onClick={() => setExpandedCategory('approvals')}
+                onClick={() => setExpandedCategory('event-approvals')}
               >
                 <span className="category-icon">✅</span>
                 <span className="category-name">Event Approvals</span>
                 <span className="category-count pending-badge">{pendingEvents.length}</span>
-                <span className="expand-icon">{expandedCategory === 'approvals' ? '▼' : '▶'}</span>
+                <span className="expand-icon">{expandedCategory === 'event-approvals' ? '▼' : '▶'}</span>
               </button>
               
-              {expandedCategory === 'approvals' && (
+              {expandedCategory === 'event-approvals' && (
                 <div className="approval-list">
                   {pendingEvents.map(event => (
                     <div key={event.id} className="approval-item">
@@ -520,6 +555,50 @@ const Home = ({ currentUser, onLogout }) => {
                           </button>
                           <button 
                             onClick={() => handleApproveEvent(event.id, false)}
+                            className="reject-btn"
+                          >
+                            ✕ Reject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {currentUser.role === 'admin' && pendingPosts.length > 0 && (
+            <div className="category-section">
+              <button 
+                className="category-btn approval-btn"
+                onClick={() => setExpandedCategory('post-approvals')}
+              >
+                <span className="category-icon">💬</span>
+                <span className="category-name">Post Approvals</span>
+                <span className="category-count pending-badge">{pendingPosts.length}</span>
+                <span className="expand-icon">{expandedCategory === 'post-approvals' ? '▼' : '▶'}</span>
+              </button>
+              
+              {expandedCategory === 'post-approvals' && (
+                <div className="approval-list">
+                  {pendingPosts.map(post => (
+                    <div key={post.id} className="approval-item">
+                      <div className="approval-header">
+                        <strong>Location Post</strong>
+                        <span className="pending-tag">PENDING</span>
+                      </div>
+                      <div className="approval-details">
+                        <div className="post-preview">{post.content}</div>
+                        <div className="approval-actions">
+                          <button 
+                            onClick={() => handleApprovePost(post.id, true)}
+                            className="approve-btn"
+                          >
+                            ✓ Approve
+                          </button>
+                          <button 
+                            onClick={() => handleApprovePost(post.id, false)}
                             className="reject-btn"
                           >
                             ✕ Reject
@@ -765,18 +844,22 @@ const Home = ({ currentUser, onLogout }) => {
         </div>
       )}
 
-      {showSchedule && (
-        <div className="modal-overlay" onClick={() => setShowSchedule(false)}>
-          <div className="modal-content schedule-modal" onClick={(e) => e.stopPropagation()}>
-            <Schedule currentUser={currentUser} onClose={() => setShowSchedule(false)} />
-          </div>
-        </div>
-      )}
-
       {showCalendar && (
         <div className="modal-overlay" onClick={() => setShowCalendar(false)}>
           <div className="modal-content calendar-modal" onClick={(e) => e.stopPropagation()}>
             <Calendar currentUser={currentUser} onClose={() => setShowCalendar(false)} />
+          </div>
+        </div>
+      )}
+
+      {selectedLocation && (
+        <div className="modal-overlay" onClick={() => setSelectedLocation(null)}>
+          <div className="modal-content location-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <LocationDetail 
+              location={selectedLocation} 
+              currentUser={currentUser}
+              onClose={() => setSelectedLocation(null)}
+            />
           </div>
         </div>
       )}
@@ -801,8 +884,10 @@ const Home = ({ currentUser, onLogout }) => {
           <div className="stats">
             <span>Total Locations: {pois.length}</span>
             <span>Total Events: {events.length}</span>
-            {currentUser.role === 'admin' && pendingEvents.length > 0 && (
-              <span className="pending-stat">Pending Approvals: {pendingEvents.length}</span>
+            {currentUser.role === 'admin' && (pendingEvents.length > 0 || pendingPosts.length > 0) && (
+              <span className="pending-stat">
+                Pending Approvals: {pendingEvents.length + pendingPosts.length}
+              </span>
             )}
           </div>
           <div className="backend-info">
