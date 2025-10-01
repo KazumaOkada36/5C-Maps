@@ -458,10 +458,9 @@ def get_location_details(location_id):
         return jsonify({'error': 'Failed to fetch location'}), 500
 
 @app.route('/api/v1/locations/<int:location_id>/posts', methods=['POST'])
-def create_location_post():
+def create_location_post(location_id):
     try:
         data = request.json
-        location_id = data.get('location_id')
         content = data.get('content')
         post_type = data.get('post_type', 'temporary')
         
