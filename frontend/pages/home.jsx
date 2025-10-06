@@ -1028,9 +1028,6 @@ const Home = ({ currentUser, onLogout }) => {
         <button className="action-btn dining" onClick={() => window.open('https://menu.jojodmo.com/', '_blank')}>
           🍽️ Dining Menus
         </button>
-        <button className="action-btn tips" onClick={() => alert('Did You Know: Students get Uber discounts!')}>
-          💡 Did You Know?
-        </button>
       </div>
 
       <footer className="footer">
