@@ -14,6 +14,7 @@ L.Icon.Default.mergeOptions({
 
 const Home = ({ currentUser, onLogout }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [pois, setPois] = useState([]);
   const [events, setEvents] = useState([]);
   const [pendingEvents, setPendingEvents] = useState([]);
@@ -40,6 +41,8 @@ const Home = ({ currentUser, onLogout }) => {
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
   const userMarkerRef = useRef(null);
+  const searchDropdownRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   const API_BASE = 'https://fivec-maps.onrender.com/api/v1';
 
@@ -48,6 +51,67 @@ const Home = ({ currentUser, onLogout }) => {
     south: 34.0930,
     east: -117.7040,
     west: -117.7140
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        searchDropdownRef.current && 
+        !searchDropdownRef.current.contains(event.target) &&
+        searchInputRef.current &&
+        !searchInputRef.current.contains(event.target)
+      ) {
+        setShowSearchDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Get search results
+  const getSearchResults = () => {
+    if (!searchTerm.trim()) return [];
+    
+    const term = searchTerm.toLowerCase();
+    const results = pois.filter(poi => 
+      poi.name.toLowerCase().includes(term) ||
+      poi.college.toLowerCase().includes(term) ||
+      poi.category.toLowerCase().includes(term)
+    );
+
+    // Group by category
+    const grouped = {
+      dining: results.filter(r => r.category === 'dining'),
+      academic: results.filter(r => r.category === 'academic'),
+      recreation: results.filter(r => r.category === 'recreation'),
+      other: results.filter(r => !['dining', 'academic', 'recreation'].includes(r.category))
+    };
+
+    return grouped;
+  };
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setShowSearchDropdown(true);
+  };
+
+  const handleSearchResultClick = (poi) => {
+    setSearchTerm(poi.name);
+    setShowSearchDropdown(false);
+    focusOnLocation(poi);
+  };
+
+  const highlightMatch = (text, search) => {
+    if (!search.trim()) return text;
+    
+    const parts = text.split(new RegExp(`(${search})`, 'gi'));
+    return parts.map((part, i) => 
+      part.toLowerCase() === search.toLowerCase() 
+        ? <mark key={i} style={{ background: '#ffc107', padding: '2px' }}>{part}</mark>
+        : part
+    );
   };
 
   useEffect(() => {
@@ -465,6 +529,9 @@ const Home = ({ currentUser, onLogout }) => {
     );
   }
 
+  const searchResults = getSearchResults();
+  const hasResults = Object.values(searchResults).some(arr => arr.length > 0);
+
   return (
     <div className="home-container">
       <header className="header">
@@ -476,13 +543,100 @@ const Home = ({ currentUser, onLogout }) => {
           <span className="tagline">5C Campus Navigation</span>
         </div>
         <div className="header-right">
-          <input
-            type="text"
-            placeholder="Search locations..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input"
-          />
+          <div className="search-container">
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search locations..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+              onFocus={() => searchTerm && setShowSearchDropdown(true)}
+              className="search-input"
+            />
+            {showSearchDropdown && searchTerm && (
+              <div ref={searchDropdownRef} className="search-dropdown">
+                {!hasResults ? (
+                  <div className="search-no-results">
+                    No locations found for "{searchTerm}"
+                  </div>
+                ) : (
+                  <>
+                    {searchResults.dining.length > 0 && (
+                      <div className="search-category">
+                        <div className="search-category-title">🍽️ Dining</div>
+                        {searchResults.dining.map(poi => (
+                          <div 
+                            key={poi.id}
+                            className="search-result-item"
+                            onClick={() => handleSearchResultClick(poi)}
+                          >
+                            <div className="search-result-name">
+                              {highlightMatch(poi.name, searchTerm)}
+                            </div>
+                            <div className="search-result-college">{poi.college}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {searchResults.academic.length > 0 && (
+                      <div className="search-category">
+                        <div className="search-category-title">📚 Academic</div>
+                        {searchResults.academic.map(poi => (
+                          <div 
+                            key={poi.id}
+                            className="search-result-item"
+                            onClick={() => handleSearchResultClick(poi)}
+                          >
+                            <div className="search-result-name">
+                              {highlightMatch(poi.name, searchTerm)}
+                            </div>
+                            <div className="search-result-college">{poi.college}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {searchResults.recreation.length > 0 && (
+                      <div className="search-category">
+                        <div className="search-category-title">🏋️ Recreation</div>
+                        {searchResults.recreation.map(poi => (
+                          <div 
+                            key={poi.id}
+                            className="search-result-item"
+                            onClick={() => handleSearchResultClick(poi)}
+                          >
+                            <div className="search-result-name">
+                              {highlightMatch(poi.name, searchTerm)}
+                            </div>
+                            <div className="search-result-college">{poi.college}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {searchResults.other.length > 0 && (
+                      <div className="search-category">
+                        <div className="search-category-title">📍 Other</div>
+                        {searchResults.other.map(poi => (
+                          <div 
+                            key={poi.id}
+                            className="search-result-item"
+                            onClick={() => handleSearchResultClick(poi)}
+                          >
+                            <div className="search-result-name">
+                              {highlightMatch(poi.name, searchTerm)}
+                            </div>
+                            <div className="search-result-college">{poi.college}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <div className="user-info">
             <span className="user-name">{currentUser.name}</span>
             <span className={`user-badge ${currentUser.role}`}>{currentUser.role}</span>
