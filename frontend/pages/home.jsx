@@ -476,7 +476,7 @@ const Home = ({ currentUser, onLogout }) => {
     setExpandedEventType(expandedEventType === eventTypeId ? null : eventTypeId);
   };
 
-  const focusOnLocationWithDirections = (poi) => {
+  const focusOnLocation = (poi) => {
     setSelectedLocation(poi);
     setShowLocationDetail(false);
     if (mapInstanceRef.current && poi.lat && poi.lng) {
