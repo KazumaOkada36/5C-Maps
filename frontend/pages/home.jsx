@@ -43,7 +43,6 @@ const Home = ({ currentUser, onLogout }) => {
   const userMarkerRef = useRef(null);
   const searchDropdownRef = useRef(null);
   const searchInputRef = useRef(null);
-  const [selectedLocation, setSelectedLocation] = useState(null);
   const [showLocationDetail, setShowLocationDetail] = useState(false); // Add this new state
 
   const API_BASE = 'https://fivec-maps.onrender.com/api/v1';
