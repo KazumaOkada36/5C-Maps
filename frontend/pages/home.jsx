@@ -372,8 +372,8 @@ const Home = ({ currentUser, onLogout }) => {
   ];
 
   const getLocationsByCategory = (category) => {
-    return filteredBySearch.filter(poi => poi.category === category);
-  };
+    return pois.filter(poi => poi.category === category);  // Use 'pois' not 'filteredBySearch'
+};
 
   const getEventsByType = (eventType) => {
     return events.filter(event => event.event_type === eventType);
