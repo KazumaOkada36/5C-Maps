@@ -39,7 +39,7 @@ const Home = ({ currentUser, onLogout }) => {
   
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
-  const markersRef = useRef([]);
+  const activePinRef = useRef(null);
   const userMarkerRef = useRef(null);
   const searchDropdownRef = useRef(null);
   const searchInputRef = useRef(null);
@@ -1027,6 +1027,9 @@ const Home = ({ currentUser, onLogout }) => {
         </button>
         <button className="action-btn dining" onClick={() => window.open('https://menu.jojodmo.com/', '_blank')}>
           🍽️ Dining Menus
+        </button>
+        <button className="action-btn tips" onClick={() => alert('Did You Know: Students get Uber discounts!')}>
+          💡 Did You Know?
         </button>
       </div>
 
