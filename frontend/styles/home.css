@@ -169,6 +169,8 @@ body {
 
 /* Event Types Container */
 .event-types-container {
+  max-height: 300px; /* Add this */
+  overflow-y: auto; /* Add this */
   margin-top: 0.5rem;
   padding-left: 1rem;
   border-left: 3px solid #9b59b6;
@@ -1408,7 +1410,7 @@ body {
 }
 /* Location List Scrolling */
 .location-list {
-  max-height: 400px;
+  max-height: 300px; /* Make this smaller - adjust as needed */
   overflow-y: auto;
   margin-top: 0.5rem;
   padding-left: 1rem;

@@ -403,6 +403,40 @@ const Home = ({ currentUser, onLogout }) => {
   }
 };
 
+const showPinForLocation = (poi) => {
+  if (!mapInstanceRef.current) return;
+
+  // Remove previous pin if it exists
+  if (activePinRef.current) {
+    mapInstanceRef.current.removeLayer(activePinRef.current);
+  }
+
+  if (!poi.lat || !poi.lng) return;
+
+  // Create a classic marker pin
+  const marker = L.marker([poi.lat, poi.lng], {
+    icon: L.icon({
+      iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+      iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    })
+  }).addTo(mapInstanceRef.current);
+
+  marker.bindPopup(`
+    <div class="map-popup">
+      <h4>${poi.name}</h4>
+      <p><strong>${poi.category}</strong></p>
+      <p>${poi.college}</p>
+    </div>
+  `).openPopup();
+
+  activePinRef.current = marker;
+};
+
   const focusOnEvent = (event) => {
     if (event.location && event.location.latitude && event.location.longitude) {
       const eventLocation = {
