@@ -332,26 +332,28 @@ const Home = ({ currentUser, onLogout }) => {
       mapInstanceRef.current.removeControl(routingControl);
     }
 
-    // Create routing control
+    // MapBox token - replace with your actual token
+    const MAPBOX_TOKEN = 'pk.eyJ1Ijoia2F6dW1hb2thZGE2IiwiYSI6ImNtZ2d2cGl2YzBvZXkybHB5d3Fnd21zNjEifQ.zaEw5vTQTbZEWXpy8_2Jrg'; // PASTE YOUR TOKEN HERE
+
+    // Create routing control with MapBox
     const control = L.Routing.control({
       waypoints: [
         L.latLng(userLocation.lat, userLocation.lng),
         L.latLng(destination.lat, destination.lng)
       ],
-      router: L.Routing.osrmv1({
-        serviceUrl: 'https://router.project-osrm.org/route/v1',
-        profile: 'foot' // Walking directions
+      router: L.Routing.mapbox(MAPBOX_TOKEN, {
+        profile: 'mapbox/walking' // Use walking profile for pedestrian paths
       }),
       lineOptions: {
         styles: [{ color: '#667eea', weight: 5, opacity: 0.7 }]
       },
-      show: false, // Don't show the turn-by-turn instructions panel
-      addWaypoints: false, // Don't allow dragging route
+      show: false,
+      addWaypoints: false,
       routeWhileDragging: false,
       draggableWaypoints: false,
       fitSelectedRoutes: true,
       showAlternatives: false,
-      createMarker: function() { return null; } // Don't add default markers
+      createMarker: function() { return null; }
     }).addTo(mapInstanceRef.current);
 
     // Listen for when route is calculated
@@ -366,8 +368,8 @@ const Home = ({ currentUser, onLogout }) => {
       
       // Calculate time for different modes
       const walkTime = timeMinutes;
-      const bikeTime = Math.max(1, Math.round(timeMinutes / 3)); // 3x faster
-      const scooterTime = Math.max(1, Math.round(timeMinutes / 2.5)); // 2.5x faster
+      const bikeTime = Math.max(1, Math.round(timeMinutes / 3));
+      const scooterTime = Math.max(1, Math.round(timeMinutes / 2.5));
       
       setRouteInfo({
         distance: distanceMiles,
