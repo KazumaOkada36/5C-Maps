@@ -1570,3 +1570,132 @@ body {
 .mini-card-close:hover {
   color: #e74c3c;
 }
+
+/* Route Info Card */
+.route-info-card {
+  position: absolute;
+  top: 140px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  min-width: 400px;
+  animation: slideDown 0.3s ease-out;
+}
+
+.route-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.route-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #2c3e50;
+}
+
+.close-route-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: #95a5a6;
+  cursor: pointer;
+  padding: 0.25rem;
+  transition: all 0.2s;
+}
+
+.close-route-btn:hover {
+  color: #e74c3c;
+}
+
+.route-details {
+  padding: 1rem 1.25rem;
+}
+
+.route-distance {
+  font-size: 0.95rem;
+  color: #6c757d;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.route-modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.route-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.route-mode:hover {
+  background: #e3f2fd;
+  transform: translateY(-2px);
+}
+
+.mode-icon {
+  font-size: 2rem;
+}
+
+.mode-time {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #667eea;
+}
+
+.mode-label {
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+.mini-card-directions {
+  padding: 0.5rem 1rem;
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.mini-card-directions:hover {
+  background: #45a049;
+}
+
+/* Hide the default routing machine instructions */
+.leaflet-routing-container {
+  display: none;
+}
+
+/* Style the route line */
+.leaflet-routing-container.leaflet-control {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .route-info-card {
+    min-width: 90%;
+    left: 5%;
+    transform: translateX(0);
+  }
+  
+  .route-modes {
+    grid-template-columns: 1fr;
+  }
+}

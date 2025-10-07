@@ -4,6 +4,9 @@ import L from 'leaflet';
 import '../styles/home.css';
 import Calendar from './Calendar.jsx';
 import LocationDetail from './LocationDetail.jsx';
+import 'leaflet-routing-machine';
+import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
+
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -44,6 +47,9 @@ const Home = ({ currentUser, onLogout }) => {
   const searchDropdownRef = useRef(null);
   const searchInputRef = useRef(null);
   const [showLocationDetail, setShowLocationDetail] = useState(false); // Add this new state
+  const [routingControl, setRoutingControl] = useState(null);
+  const [routeInfo, setRouteInfo] = useState(null);
+
 
   const API_BASE = 'https://fivec-maps.onrender.com/api/v1';
 
@@ -312,6 +318,78 @@ const Home = ({ currentUser, onLogout }) => {
       console.error('Failed to fetch starred:', err);
     }
   };
+  //to get directions
+  const getDirections = (destination) => {
+    if (!userLocation) {
+      alert('Please enable location services to get directions');
+      return;
+    }
+
+    if (!mapInstanceRef.current) return;
+
+    // Remove existing route if there is one
+    if (routingControl) {
+      mapInstanceRef.current.removeControl(routingControl);
+    }
+
+    // Create routing control
+    const control = L.Routing.control({
+      waypoints: [
+        L.latLng(userLocation.lat, userLocation.lng),
+        L.latLng(destination.lat, destination.lng)
+      ],
+      router: L.Routing.osrmv1({
+        serviceUrl: 'https://router.project-osrm.org/route/v1',
+        profile: 'foot' // Walking directions
+      }),
+      lineOptions: {
+        styles: [{ color: '#667eea', weight: 5, opacity: 0.7 }]
+      },
+      show: false, // Don't show the turn-by-turn instructions panel
+      addWaypoints: false, // Don't allow dragging route
+      routeWhileDragging: false,
+      draggableWaypoints: false,
+      fitSelectedRoutes: true,
+      showAlternatives: false,
+      createMarker: function() { return null; } // Don't add default markers
+    }).addTo(mapInstanceRef.current);
+
+    // Listen for when route is calculated
+    control.on('routesfound', function(e) {
+      const routes = e.routes;
+      const summary = routes[0].summary;
+      
+      // Distance in meters, time in seconds
+      const distanceKm = (summary.totalDistance / 1000).toFixed(2);
+      const distanceMiles = (summary.totalDistance / 1609.34).toFixed(2);
+      const timeMinutes = Math.round(summary.totalTime / 60);
+      
+      // Calculate time for different modes
+      const walkTime = timeMinutes;
+      const bikeTime = Math.max(1, Math.round(timeMinutes / 3)); // 3x faster
+      const scooterTime = Math.max(1, Math.round(timeMinutes / 2.5)); // 2.5x faster
+      
+      setRouteInfo({
+        distance: distanceMiles,
+        distanceKm: distanceKm,
+        walkTime: walkTime,
+        bikeTime: bikeTime,
+        scooterTime: scooterTime,
+        destination: destination.name
+      });
+    });
+
+    setRoutingControl(control);
+  };
+    
+  //clearing directions
+  const clearDirections = () => {
+    if (routingControl && mapInstanceRef.current) {
+      mapInstanceRef.current.removeControl(routingControl);
+      setRoutingControl(null);
+      setRouteInfo(null);
+    }
+  };
 
   const isStarred = (itemType, itemId) => {
     return starredItems.some(s => s.item_type === itemType && s.item_id === itemId);
@@ -393,15 +471,14 @@ const Home = ({ currentUser, onLogout }) => {
     setExpandedEventType(expandedEventType === eventTypeId ? null : eventTypeId);
   };
 
-  const focusOnLocation = (poi) => {
-  console.log("Focusing on:", poi);
-  setSelectedLocation(poi); // Store the location
-  setShowLocationDetail(false); // Don't open full popup
-  if (mapInstanceRef.current && poi.lat && poi.lng) {
-    mapInstanceRef.current.setView([poi.lat, poi.lng], 18);
-    showPinForLocation(poi);
-  }
-};
+  const focusOnLocationWithDirections = (poi) => {
+    setSelectedLocation(poi);
+    setShowLocationDetail(false);
+    if (mapInstanceRef.current && poi.lat && poi.lng) {
+      mapInstanceRef.current.setView([poi.lat, poi.lng], 18);
+      showPinForLocation(poi);
+    }
+  };
 
 const showPinForLocation = (poi) => {
   if (!mapInstanceRef.current) return;
@@ -690,6 +767,12 @@ const showPinForLocation = (poi) => {
             <div className="mini-card-college">{selectedLocation.college}</div>
           </div>
           <button 
+            className="mini-card-directions"
+            onClick={() => getDirections(selectedLocation)}
+          >
+            🧭 Directions
+          </button>
+          <button 
             className="mini-card-see-more"
             onClick={() => setShowLocationDetail(true)}
           >
@@ -697,13 +780,46 @@ const showPinForLocation = (poi) => {
           </button>
           <button 
             className="mini-card-close"
-            onClick={() => setSelectedLocation(null)}
+            onClick={() => {
+              setSelectedLocation(null);
+              clearDirections();
+            }}
           >
             ✕
           </button>
         </div>
       </div>
     )}
+    {routeInfo && (
+    <div className="route-info-card">
+      <div className="route-header">
+        <h3>Directions to {routeInfo.destination}</h3>
+        <button onClick={clearDirections} className="close-route-btn">✕</button>
+      </div>
+      <div className="route-details">
+        <div className="route-distance">
+          📏 {routeInfo.distance} miles ({routeInfo.distanceKm} km)
+        </div>
+        <div className="route-modes">
+          <div className="route-mode">
+            <span className="mode-icon">🚶</span>
+            <span className="mode-time">{routeInfo.walkTime} min</span>
+            <span className="mode-label">Walking</span>
+          </div>
+          <div className="route-mode">
+            <span className="mode-icon">🚴</span>
+            <span className="mode-time">{routeInfo.bikeTime} min</span>
+            <span className="mode-label">Biking</span>
+          </div>
+          <div className="route-mode">
+            <span className="mode-icon">🛴</span>
+            <span className="mode-time">{routeInfo.scooterTime} min</span>
+            <span className="mode-label">Scooter</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
       <div className="main-content">
         <div className="map-section">
           <div className="leaflet-map-container">
