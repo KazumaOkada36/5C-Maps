@@ -43,6 +43,8 @@ const Home = ({ currentUser, onLogout }) => {
   const userMarkerRef = useRef(null);
   const searchDropdownRef = useRef(null);
   const searchInputRef = useRef(null);
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [showLocationDetail, setShowLocationDetail] = useState(false); // Add this new state
 
   const API_BASE = 'https://fivec-maps.onrender.com/api/v1';
 
@@ -393,11 +395,14 @@ const Home = ({ currentUser, onLogout }) => {
   };
 
   const focusOnLocation = (poi) => {
-    setSelectedLocation(poi);
-    if (mapInstanceRef.current && poi.lat && poi.lng) {
-      mapInstanceRef.current.setView([poi.lat, poi.lng], 18);
-    }
-  };
+  console.log("Focusing on:", poi);
+  setSelectedLocation(poi); // Store the location
+  setShowLocationDetail(false); // Don't open full popup
+  if (mapInstanceRef.current && poi.lat && poi.lng) {
+    mapInstanceRef.current.setView([poi.lat, poi.lng], 18);
+    showPinForLocation(poi);
+  }
+};
 
   const focusOnEvent = (event) => {
     if (event.location && event.location.latitude && event.location.longitude) {
@@ -540,7 +545,7 @@ const Home = ({ currentUser, onLogout }) => {
             <span className="logo-icon-small">🗾</span>
             <h1>Chizu</h1>
           </div>
-          <span className="tagline">5C Campus Navigation</span>
+          <span className="setShowSearchDropdowntagline">5C Campus Navigation</span>
         </div>
         <div className="header-right">
           <div className="search-container">
@@ -644,7 +649,28 @@ const Home = ({ currentUser, onLogout }) => {
           </div>
         </div>
       </header>
-
+      {selectedLocation && !showLocationDetail && (
+      <div className="mini-location-card">
+        <div className="mini-card-content">
+          <div className="mini-card-info">
+            <div className="mini-card-name">{selectedLocation.name}</div>
+            <div className="mini-card-college">{selectedLocation.college}</div>
+          </div>
+          <button 
+            className="mini-card-see-more"
+            onClick={() => setShowLocationDetail(true)}
+          >
+            See More →
+          </button>
+          <button 
+            className="mini-card-close"
+            onClick={() => setSelectedLocation(null)}
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    )}
       <div className="main-content">
         <div className="map-section">
           <div className="leaflet-map-container">
@@ -1016,13 +1042,16 @@ const Home = ({ currentUser, onLogout }) => {
         </div>
       )}
 
-      {selectedLocation && (
-        <div className="modal-overlay" onClick={() => setSelectedLocation(null)}>
+      {showLocationDetail && selectedLocation && (
+        <div className="modal-overlay" onClick={() => setShowLocationDetail(false)}>
           <div className="modal-content location-detail-modal" onClick={(e) => e.stopPropagation()}>
             <LocationDetail 
               location={selectedLocation} 
               currentUser={currentUser}
-              onClose={() => setSelectedLocation(null)}
+              onClose={() => {
+                setShowLocationDetail(false);
+                setSelectedLocation(null);
+              }}
             />
           </div>
         </div>
@@ -1037,9 +1066,6 @@ const Home = ({ currentUser, onLogout }) => {
         </button>
         <button className="action-btn dining" onClick={() => window.open('https://menu.jojodmo.com/', '_blank')}>
           🍽️ Dining Menus
-        </button>
-        <button className="action-btn tips" onClick={() => alert('Did You Know: Students get Uber discounts!')}>
-          💡 Did You Know?
         </button>
       </div>
 
