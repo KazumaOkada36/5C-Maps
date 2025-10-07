@@ -867,28 +867,38 @@ const Home = ({ currentUser, onLogout }) => {
                       <div className="no-locations">No locations found</div>
                     ) : (
                       locations.map(poi => (
-                        <div 
-                          key={poi.id} 
-                          className="location-item"
-                          onClick={() => focusOnLocation(poi)}
-                        >
-                          <div className="location-header-row">
-                            <div>
-                              <div className="location-name">{poi.name}</div>
-                              <div className="location-college">{poi.college}</div>
+                        <div key={poi.id} className="location-item-container">
+                          <div 
+                            className="location-item"
+                            onClick={() => focusOnLocation(poi)}
+                          >
+                            <div className="location-header-row">
+                              <div>
+                                <div className="location-name">{poi.name}</div>
+                                <div className="location-college">{poi.college}</div>
+                              </div>
+                              {currentUser.role !== 'guest' && (
+                                <button
+                                  className={`star-btn ${isStarred('location', poi.id) ? 'starred' : ''}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStar('location', poi.id);
+                                  }}
+                                >
+                                  {isStarred('location', poi.id) ? '⭐' : '☆'}
+                                </button>
+                              )}
                             </div>
-                            {currentUser.role !== 'guest' && (
-                              <button
-                                className={`star-btn ${isStarred('location', poi.id) ? 'starred' : ''}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleStar('location', poi.id);
-                                }}
-                              >
-                                {isStarred('location', poi.id) ? '⭐' : '☆'}
-                              </button>
-                            )}
                           </div>
+                          <button 
+                            className="see-more-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedLocation(poi);
+                            }}
+                          >
+                            See More →
+                          </button>
                         </div>
                       ))
                     )}
