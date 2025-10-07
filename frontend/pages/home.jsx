@@ -49,6 +49,7 @@ const Home = ({ currentUser, onLogout }) => {
   const [showLocationDetail, setShowLocationDetail] = useState(false); // Add this new state
   const [routingControl, setRoutingControl] = useState(null);
   const [routeInfo, setRouteInfo] = useState(null);
+  const [routeCollapsed, setRouteCollapsed] = useState(false);
 
 
   const API_BASE = 'https://fivec-maps.onrender.com/api/v1';
@@ -107,6 +108,7 @@ const Home = ({ currentUser, onLogout }) => {
   const handleSearchResultClick = (poi) => {
     setSearchTerm(poi.name);
     setShowSearchDropdown(false);
+    setSelectedLocation(poi); // Add this line to show mini card
     focusOnLocation(poi);
   };
 
@@ -390,6 +392,7 @@ const Home = ({ currentUser, onLogout }) => {
       mapInstanceRef.current.removeControl(routingControl);
       setRoutingControl(null);
       setRouteInfo(null);
+      setRouteCollapsed(false); // Add this line
     }
   };
 
@@ -793,33 +796,43 @@ const showPinForLocation = (poi) => {
       </div>
     )}
     {routeInfo && (
-    <div className="route-info-card">
+    <div className={`route-info-card ${routeCollapsed ? 'collapsed' : ''}`}>
       <div className="route-header">
         <h3>Directions to {routeInfo.destination}</h3>
-        <button onClick={clearDirections} className="close-route-btn">✕</button>
-      </div>
-      <div className="route-details">
-        <div className="route-distance">
-          📏 {routeInfo.distance} miles ({routeInfo.distanceKm} km)
-        </div>
-        <div className="route-modes">
-          <div className="route-mode">
-            <span className="mode-icon">🚶</span>
-            <span className="mode-time">{routeInfo.walkTime} min</span>
-            <span className="mode-label">Walking</span>
-          </div>
-          <div className="route-mode">
-            <span className="mode-icon">🚴</span>
-            <span className="mode-time">{routeInfo.bikeTime} min</span>
-            <span className="mode-label">Biking</span>
-          </div>
-          <div className="route-mode">
-            <span className="mode-icon">🛴</span>
-            <span className="mode-time">{routeInfo.scooterTime} min</span>
-            <span className="mode-label">Scooter</span>
-          </div>
+        <div className="route-header-actions">
+          <button 
+            onClick={() => setRouteCollapsed(!routeCollapsed)} 
+            className="collapse-route-btn"
+          >
+            {routeCollapsed ? '▲' : '▼'}
+          </button>
+          <button onClick={clearDirections} className="close-route-btn">✕</button>
         </div>
       </div>
+      {!routeCollapsed && (
+        <div className="route-details">
+          <div className="route-distance">
+            📏 {routeInfo.distance} miles ({routeInfo.distanceKm} km)
+          </div>
+          <div className="route-modes">
+            <div className="route-mode">
+              <span className="mode-icon">🚶</span>
+              <span className="mode-time">{routeInfo.walkTime} min</span>
+              <span className="mode-label">Walking</span>
+            </div>
+            <div className="route-mode">
+              <span className="mode-icon">🚴</span>
+              <span className="mode-time">{routeInfo.bikeTime} min</span>
+              <span className="mode-label">Biking</span>
+            </div>
+            <div className="route-mode">
+              <span className="mode-icon">🛴</span>
+              <span className="mode-time">{routeInfo.scooterTime} min</span>
+              <span className="mode-label">Scooter</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )}
       <div className="main-content">
