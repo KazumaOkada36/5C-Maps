@@ -158,6 +158,79 @@ class StarredItem(db.Model):
             'item_id': self.item_id
         }
 
+class Department(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    code = db.Column(db.String(10), nullable=False)
+    college_id = db.Column(db.Integer, db.ForeignKey('college.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    college = db.relationship('College', backref='departments')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'code': self.code,
+            'college': self.college.name if self.college else None
+        }
+
+
+class Course(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    course_code = db.Column(db.String(20), nullable=False)
+    section = db.Column(db.String(10), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    department_code = db.Column(db.String(10))
+    college_id = db.Column(db.Integer, db.ForeignKey('college.id'))
+    location_id = db.Column(db.Integer, db.ForeignKey('location.id'))
+    instructors = db.Column(db.String(200))
+    days = db.Column(db.String(10))
+    time = db.Column(db.String(50))
+    seats_available = db.Column(db.String(50))
+    credit = db.Column(db.String(10))
+    semester = db.Column(db.String(20), default='Fall 2024')
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    college = db.relationship('College', backref='courses')
+    location = db.relationship('Location', backref='courses')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'course_code': self.course_code,
+            'section': self.section,
+            'title': self.title,
+            'department_code': self.department_code,
+            'college': self.college.name if self.college else None,
+            'location': self.location.to_dict() if self.location else None,
+            'instructors': self.instructors,
+            'days': self.days,
+            'time': self.time,
+            'seats_available': self.seats_available,
+            'credit': self.credit,
+            'semester': self.semester,
+            'notes': self.notes
+        }
+
+
+class UserCourse(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', backref='enrolled_courses')
+    course = db.relationship('Course', backref='enrolled_students')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'course': self.course.to_dict() if self.course else None
+        }
+    
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -628,9 +701,107 @@ def delete_event(event_id):
         print(f"❌ Delete event error: {e}")
         return jsonify({'error': 'Failed to delete event'}), 500
 
-@app.route('/api/v1/courses')
+@app.route('/api/v1/courses', methods=['GET'])
 def get_courses():
-    return jsonify([])
+    try:
+        college = request.args.get('college')
+        department = request.args.get('department')
+        search = request.args.get('search')
+        semester = request.args.get('semester', 'Fall 2024')
+        
+        query = Course.query.filter_by(semester=semester)
+        
+        if college:
+            college_obj = College.query.filter_by(code=college).first()
+            if college_obj:
+                query = query.filter_by(college_id=college_obj.id)
+        
+        if department:
+            query = query.filter(Course.department_code.ilike(f'%{department}%'))
+        
+        if search:
+            query = query.filter(
+                db.or_(
+                    Course.title.ilike(f'%{search}%'),
+                    Course.course_code.ilike(f'%{search}%'),
+                    Course.instructors.ilike(f'%{search}%')
+                )
+            )
+        
+        courses = query.all()
+        
+        return jsonify({
+            'courses': [c.to_dict() for c in courses],
+            'total': len(courses),
+            'semester': semester
+        })
+    except Exception as e:
+        print(f"❌ Get courses error: {e}")
+        return jsonify({'error': 'Failed to fetch courses'}), 500
+
+
+@app.route('/api/v1/user/courses', methods=['GET'])
+def get_user_courses():
+    try:
+        user_id = request.args.get('user_id')
+        if not user_id:
+            return jsonify({'error': 'user_id required'}), 400
+        
+        user_courses = UserCourse.query.filter_by(user_id=user_id).all()
+        return jsonify([uc.to_dict() for uc in user_courses])
+    except Exception as e:
+        print(f"❌ Get user courses error: {e}")
+        return jsonify({'error': 'Failed to fetch user courses'}), 500
+
+
+@app.route('/api/v1/user/courses', methods=['POST'])
+def add_user_course():
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        course_id = data.get('course_id')
+        
+        if not user_id or not course_id:
+            return jsonify({'error': 'user_id and course_id required'}), 400
+        
+        existing = UserCourse.query.filter_by(
+            user_id=user_id,
+            course_id=course_id
+        ).first()
+        
+        if existing:
+            return jsonify({'message': 'Already enrolled in this course'}), 200
+        
+        user_course = UserCourse(user_id=user_id, course_id=course_id)
+        db.session.add(user_course)
+        db.session.commit()
+        
+        return jsonify(user_course.to_dict()), 201
+    except Exception as e:
+        print(f"❌ Add user course error: {e}")
+        return jsonify({'error': 'Failed to add course'}), 500
+
+
+@app.route('/api/v1/user/courses/<int:user_course_id>', methods=['DELETE'])
+def remove_user_course(user_course_id):
+    try:
+        user_course = UserCourse.query.get_or_404(user_course_id)
+        db.session.delete(user_course)
+        db.session.commit()
+        return jsonify({'message': 'Course removed from schedule'}), 200
+    except Exception as e:
+        print(f"❌ Remove user course error: {e}")
+        return jsonify({'error': 'Failed to remove course'}), 500
+
+
+@app.route('/api/v1/departments', methods=['GET'])
+def get_departments():
+    try:
+        departments = Department.query.all()
+        return jsonify([d.to_dict() for d in departments])
+    except Exception as e:
+        print(f"❌ Get departments error: {e}")
+        return jsonify({'error': 'Failed to fetch departments'}), 500
 
 # Initialize database when module loads (works with gunicorn)
 with app.app_context():
@@ -754,6 +925,60 @@ with app.app_context():
         for e in events:
             db.session.add(e)
         db.session.commit()
+        
+        # Create departments (ADD THIS HERE - inside the if College.query.count() == 0 block)
+        print("🔄 Creating departments...")
+        departments_data = [
+            {'name': 'Computer Science', 'code': 'CSCI', 'college_id': 1},
+            {'name': 'Biology', 'code': 'BIOL', 'college_id': 1},
+            {'name': 'Mathematics', 'code': 'MATH', 'college_id': 1},
+            {'name': 'English', 'code': 'ENGL', 'college_id': 1},
+            {'name': 'History', 'code': 'HIST', 'college_id': 1},
+            {'name': 'Economics', 'code': 'ECON', 'college_id': 2},
+            {'name': 'Psychology', 'code': 'PSYC', 'college_id': 1},
+            {'name': 'Chemistry', 'code': 'CHEM', 'college_id': 1},
+            {'name': 'Physics', 'code': 'PHYS', 'college_id': 4},
+            {'name': 'African Studies', 'code': 'AFRI', 'college_id': 1},
+        ]
+        
+        for dept_data in departments_data:
+            dept = Department(**dept_data)
+            db.session.add(dept)
+        
+        db.session.commit()
+        print("✅ Departments created")
+        
+        # Create sample courses (ADD THIS HERE TOO)
+        print("🔄 Creating sample courses...")
+        sample_courses = [
+            Course(
+                course_code='CSCI051', section='01',
+                title='Introduction to Computer Science',
+                department_code='CSCI', college_id=1, location_id=11,
+                instructors='Prof. Smith', days='MWF', time='9:00AM-9:50AM',
+                seats_available='0/24 (Closed)', credit='1.00', semester='Fall 2024'
+            ),
+            Course(
+                course_code='BIOL044', section='01',
+                title='General Biology',
+                department_code='BIOL', college_id=1, location_id=12,
+                instructors='Prof. Johnson', days='TR', time='10:00AM-11:15AM',
+                seats_available='12/30 (Open)', credit='1.00', semester='Fall 2024'
+            ),
+            Course(
+                course_code='MATH058', section='01',
+                title='Calculus I',
+                department_code='MATH', college_id=1, location_id=13,
+                instructors='Prof. Williams', days='MWF', time='11:00AM-11:50AM',
+                seats_available='5/25 (Open)', credit='1.00', semester='Fall 2024'
+            ),
+        ]
+        
+        for course in sample_courses:
+            db.session.add(course)
+        
+        db.session.commit()
+        print("✅ Sample courses created")
         
         print(f"✅ Database initialized with {len(locations)} locations and {len(events)} events")
 

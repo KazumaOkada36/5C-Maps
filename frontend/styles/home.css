@@ -1794,3 +1794,11 @@ body {
     transform: none;
   }
 }
+
+.courses-modal {
+  max-width: 1400px !important;
+  width: 98% !important;
+  max-height: 95vh;
+  padding: 0 !important;
+  overflow: hidden;
+}

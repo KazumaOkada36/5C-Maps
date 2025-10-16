@@ -6,7 +6,7 @@ import Calendar from './Calendar.jsx';
 import LocationDetail from './LocationDetail.jsx';
 import 'leaflet-routing-machine';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
-
+import Courses from './Courses.jsx';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -24,6 +24,7 @@ const Home = ({ currentUser, onLogout }) => {
   const [pendingPosts, setPendingPosts] = useState([]);
   const [expandedCategory, setExpandedCategory] = useState(null);
   const [expandedEventType, setExpandedEventType] = useState(null);
+  const [showCourses, setShowCourses] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showEventForm, setShowEventForm] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -1205,6 +1206,21 @@ const showPinForLocation = (poi) => {
           </div>
         </div>
       )}
+      {showCourses && (
+        <div className="modal-overlay" onClick={() => setShowCourses(false)}>
+          <div className="modal-content courses-modal" onClick={(e) => e.stopPropagation()}>
+            <Courses 
+              currentUser={currentUser}
+              onClose={() => setShowCourses(false)}
+              onViewOnMap={(location) => {
+                setSelectedLocation(location);
+                focusOnLocation(location);
+                setShowCourses(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {showLocationDetail && selectedLocation && (
         <div className="modal-overlay" onClick={() => setShowLocationDetail(false)}>
@@ -1225,7 +1241,7 @@ const showPinForLocation = (poi) => {
         <button className="action-btn events" onClick={handlePostEvent}>
           📅 Post Event
         </button>
-        <button className="action-btn classes" onClick={() => alert('Find Classes - Coming soon!')}>
+        <button className="action-btn classes" onClick={() => setShowCourses(true)}>
           📚 Find Classes
         </button>
         <button className="action-btn dining" onClick={() => window.open('https://menu.jojodmo.com/', '_blank')}>
