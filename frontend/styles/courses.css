@@ -275,6 +275,24 @@
   color: #856404;
 }
 
+.see-reviews-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border: 2px solid #667eea;
+  border-radius: 8px;
+  color: #667eea;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 0.75rem;
+}
+
+.see-reviews-btn:hover {
+  background: #667eea;
+  color: white;
+}
+
 /* Loading and Empty States */
 .courses-loading {
   text-align: center;

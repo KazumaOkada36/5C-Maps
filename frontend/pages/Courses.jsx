@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import '../styles/courses.css';
 
-const Courses = ({ currentUser, onClose, onViewOnMap }) => {
+const Courses = ({ currentUser, onClose, onViewOnMap, onViewCourseDetail }) => {
   const [courses, setCourses] = useState([]);
   const [userCourses, setUserCourses] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -269,6 +269,13 @@ const Courses = ({ currentUser, onClose, onViewOnMap }) => {
                       <strong>Note:</strong> {course.notes}
                     </div>
                   )}
+
+                  <button 
+                    className="see-reviews-btn"
+                    onClick={() => onViewCourseDetail(course)}
+                  >
+                    💬 See Reviews & Details →
+                  </button>
                 </div>
               </div>
             ))

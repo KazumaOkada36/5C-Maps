@@ -230,7 +230,31 @@ class UserCourse(db.Model):
             'user_id': self.user_id,
             'course': self.course.to_dict() if self.course else None
         }
+class CoursePost(db.Model):
+    """Student reviews/gossip about courses"""
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    content = db.Column(db.String(500), nullable=False)
+    post_type = db.Column(db.String(20), nullable=False)  # 'temporary' or 'permanent'
+    status = db.Column(db.String(20), default='pending')  # 'pending', 'approved', 'expired'
+    created_by = db.Column(db.String(100), default='Anonymous')
+    expires_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    course = db.relationship('Course', backref='posts')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'course_id': self.course_id,
+            'content': self.content,
+            'post_type': self.post_type,
+            'status': self.status,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat(),
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None
+        } 
+       
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -793,7 +817,109 @@ def remove_user_course(user_course_id):
         print(f"❌ Remove user course error: {e}")
         return jsonify({'error': 'Failed to remove course'}), 500
 
+@app.route('/api/v1/courses/<int:course_id>', methods=['GET'])
+def get_course_detail(course_id):
+    """Get detailed info about a specific course including posts"""
+    try:
+        course = Course.query.get_or_404(course_id)
+        
+        # Get active posts
+        now = datetime.utcnow()
+        posts = CoursePost.query.filter_by(course_id=course_id).all()
+        
+        active_posts = []
+        for post in posts:
+            # Expire old temporary posts
+            if post.post_type == 'temporary' and post.expires_at and post.expires_at < now:
+                post.status = 'expired'
+                continue
+            
+            # Only show approved posts
+            if post.status == 'approved':
+                active_posts.append(post.to_dict())
+        
+        db.session.commit()
+        
+        return jsonify({
+            'course': course.to_dict(),
+            'posts': active_posts
+        })
+    except Exception as e:
+        print(f"❌ Get course detail error: {e}")
+        return jsonify({'error': 'Failed to fetch course'}), 500
 
+
+@app.route('/api/v1/courses/<int:course_id>/posts', methods=['POST'])
+def create_course_post(course_id):
+    """Create a post/review about a course"""
+    try:
+        data = request.json
+        content = data.get('content')
+        post_type = data.get('post_type', 'temporary')
+        
+        if not content:
+            return jsonify({'error': 'Content is required'}), 400
+        
+        new_post = CoursePost(
+            course_id=course_id,
+            content=content,
+            post_type=post_type,
+            created_by='Anonymous'
+        )
+        
+        # Temporary posts are auto-approved and expire in 3 hours
+        if post_type == 'temporary':
+            new_post.status = 'approved'
+            new_post.expires_at = datetime.utcnow() + timedelta(hours=3)
+        else:
+            # Permanent posts need admin approval
+            new_post.status = 'pending'
+        
+        db.session.add(new_post)
+        db.session.commit()
+        
+        return jsonify(new_post.to_dict()), 201
+    except Exception as e:
+        print(f"❌ Create course post error: {e}")
+        return jsonify({'error': 'Failed to create post'}), 500
+
+
+@app.route('/api/v1/course-posts/pending', methods=['GET'])
+def get_pending_course_posts():
+    """Get pending course posts for admin approval"""
+    try:
+        pending = CoursePost.query.filter_by(post_type='permanent', status='pending').all()
+        return jsonify([p.to_dict() for p in pending])
+    except Exception as e:
+        print(f"❌ Get pending course posts error: {e}")
+        return jsonify({'error': 'Failed to fetch posts'}), 500
+
+
+@app.route('/api/v1/course-posts/<int:post_id>/approve', methods=['PATCH'])
+def approve_course_post(post_id):
+    """Approve a course post"""
+    try:
+        post = CoursePost.query.get_or_404(post_id)
+        post.status = 'approved'
+        db.session.commit()
+        return jsonify(post.to_dict())
+    except Exception as e:
+        print(f"❌ Approve course post error: {e}")
+        return jsonify({'error': 'Failed to approve post'}), 500
+
+
+@app.route('/api/v1/course-posts/<int:post_id>', methods=['DELETE'])
+def delete_course_post(post_id):
+    """Delete a course post"""
+    try:
+        post = CoursePost.query.get_or_404(post_id)
+        db.session.delete(post)
+        db.session.commit()
+        return jsonify({'message': 'Post deleted'}), 200
+    except Exception as e:
+        print(f"❌ Delete course post error: {e}")
+        return jsonify({'error': 'Failed to delete post'}), 500
+    
 @app.route('/api/v1/departments', methods=['GET'])
 def get_departments():
     try:

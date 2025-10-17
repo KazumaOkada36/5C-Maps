@@ -7,6 +7,7 @@ import LocationDetail from './LocationDetail.jsx';
 import 'leaflet-routing-machine';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 import Courses from './Courses.jsx';
+import CourseDetail from './CourseDetail.jsx';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -51,6 +52,8 @@ const Home = ({ currentUser, onLogout }) => {
   const [routingControl, setRoutingControl] = useState(null);
   const [routeInfo, setRouteInfo] = useState(null);
   const [routeCollapsed, setRouteCollapsed] = useState(false);
+  const [showCourseDetail, setShowCourseDetail] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState(null);
 
 
   const API_BASE = 'https://fivec-maps.onrender.com/api/v1';
@@ -1217,6 +1220,21 @@ const showPinForLocation = (poi) => {
                 focusOnLocation(location);
                 setShowCourses(false);
               }}
+              onViewCourseDetail={(course) => {
+                setSelectedCourse(course);
+                setShowCourseDetail(true);
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {showCourseDetail && selectedCourse && (
+        <div className="modal-overlay" onClick={() => setShowCourseDetail(false)}>
+          <div className="modal-content course-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <CourseDetail 
+              course={selectedCourse}
+              currentUser={currentUser}
+              onClose={() => setShowCourseDetail(false)}
             />
           </div>
         </div>
