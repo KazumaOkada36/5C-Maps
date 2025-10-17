@@ -2,11 +2,12 @@
 
 .courses-container {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1400px;
   padding: 1.5rem;
-  height: 100%;
+  height: 90vh; /* Fixed height */
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* Prevent outer scroll */
 }
 
 .courses-header {
@@ -120,18 +121,21 @@
 .courses-list {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
   gap: 1.5rem;
-  padding-right: 0.5rem;
+  padding: 1rem;
+  max-height: calc(90vh - 250px); /* Make scrollable */
 }
 
 .course-card {
   background: white;
   border: 2px solid #e0e0e0;
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 1.25rem;
   transition: all 0.3s;
+  height: fit-content;
 }
 
 .course-card:hover {

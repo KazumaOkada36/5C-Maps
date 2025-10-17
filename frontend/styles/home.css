@@ -1798,7 +1798,10 @@ body {
 .courses-modal {
   max-width: 1400px !important;
   width: 98% !important;
-  max-height: 95vh;
+  max-height: 95vh !important;
+  height: 95vh !important; /* Add fixed height */
   padding: 0 !important;
-  overflow: hidden;
+  overflow: hidden !important; /* Prevent outer scroll */
+  display: flex !important;
+  flex-direction: column !important;
 }
