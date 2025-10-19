@@ -9,7 +9,6 @@ import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 import Courses from './Courses.jsx';
 import CourseDetail from './CourseDetail.jsx';
 import MobileApp from './MobileApp.jsx';
-import { useState, useEffect } from 'react';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
