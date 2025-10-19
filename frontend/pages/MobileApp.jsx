@@ -1,5 +1,4 @@
-// Save as: frontend/pages/MobileApp.jsx
-
+// MobileApp.jsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -21,6 +20,8 @@ const MobileApp = ({
 }) => {
   const [activeTab, setActiveTab] = useState('home');
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [showCourses, setShowCourses] = useState(false);
@@ -31,6 +32,39 @@ const MobileApp = ({
   
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const markersRef = useRef([]);
+
+  // Handle search
+  const handleSearch = (value) => {
+    setSearchTerm(value);
+    
+    if (!value.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    const term = value.toLowerCase();
+    const results = pois.filter(poi => 
+      poi.name.toLowerCase().includes(term) ||
+      poi.college.toLowerCase().includes(term) ||
+      poi.category.toLowerCase().includes(term)
+    );
+
+    setSearchResults(results);
+    setShowSearchResults(true);
+  };
+
+  const handleSearchResultClick = (location) => {
+    setSelectedLocation(location);
+    setShowSearchResults(false);
+    setSearchTerm('');
+    
+    // Focus on map if we're on map tab
+    if (activeTab === 'map' && mapInstanceRef.current) {
+      mapInstanceRef.current.setView([location.lat, location.lng], 18);
+    }
+  };
 
   // Initialize map when on map tab
   useEffect(() => {
@@ -72,6 +106,8 @@ const MobileApp = ({
         marker.on('click', () => {
           setSelectedLocation(poi);
         });
+
+        markersRef.current.push(marker);
       });
     }
 
@@ -79,6 +115,7 @@ const MobileApp = ({
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+        markersRef.current = [];
       }
     };
   }, [activeTab, pois]);
@@ -102,11 +139,6 @@ const MobileApp = ({
     if (userLocation && mapInstanceRef.current) {
       mapInstanceRef.current.setView([userLocation.lat, userLocation.lng], 17);
     }
-  };
-
-  const handleLocationClick = (location) => {
-    setSelectedLocation(location);
-    setShowLocationDetail(true);
   };
 
   return (
@@ -168,7 +200,6 @@ const MobileApp = ({
               </button>
             </div>
 
-            {/* Quick Stats */}
             <div className="mobile-stats">
               <div className="stat-card">
                 <span className="stat-number">{pois.length}</span>
@@ -194,9 +225,24 @@ const MobileApp = ({
                 type="text"
                 placeholder="🔍 Search locations..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => handleSearch(e.target.value)}
                 className="mobile-search-input"
               />
+              
+              {showSearchResults && searchResults.length > 0 && (
+                <div className="mobile-search-results">
+                  {searchResults.map(location => (
+                    <div 
+                      key={location.id}
+                      className="mobile-search-result-item"
+                      onClick={() => handleSearchResultClick(location)}
+                    >
+                      <div className="result-name">{location.name}</div>
+                      <div className="result-college">{location.college}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             
             <div ref={mapRef} className="mobile-map"></div>
@@ -286,7 +332,7 @@ const MobileApp = ({
         )}
       </div>
 
-      {/* Bottom Navigation */}
+      {/* Bottom Navigation - IMPROVED */}
       <div className="mobile-bottom-nav">
         <button 
           className={`nav-btn ${activeTab === 'home' ? 'active' : ''}`}

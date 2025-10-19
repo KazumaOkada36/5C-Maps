@@ -1,30 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import '../styles/calendar.css';
 
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const HOURS = Array.from({ length: 24 }, (_, i) => i); // 0-23 (24 hours)
-
 const Calendar = ({ currentUser, onClose }) => {
-  const [currentWeek, setCurrentWeek] = useState([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [view, setView] = useState('week'); // 'week' or 'month'
   const [starredEvents, setStarredEvents] = useState([]);
   const [allEvents, setAllEvents] = useState([]);
 
   useEffect(() => {
-    // Get current week dates
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const sunday = new Date(today);
-    sunday.setDate(today.getDate() - dayOfWeek);
-    
-    const week = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(sunday);
-      date.setDate(sunday.getDate() + i);
-      week.push(date);
-    }
-    setCurrentWeek(week);
-
-    // Fetch events
     fetchEvents();
     if (currentUser.id) {
       fetchStarredEvents();
@@ -52,64 +35,49 @@ const Calendar = ({ currentUser, onClose }) => {
     }
   };
 
-  const formatHour = (hour) => {
-    if (hour === 0) return '12 AM';
-    if (hour === 12) return '12 PM';
-    if (hour < 12) return `${hour} AM`;
-    return `${hour - 12} PM`;
+  const getWeekDates = () => {
+    const start = new Date(currentDate);
+    start.setDate(currentDate.getDate() - currentDate.getDay()); // Start on Sunday
+    
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      dates.push(date);
+    }
+    return dates;
   };
 
-  const getEventsForDateTime = (date, hour) => {
-    const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+  const getEventsForDate = (date) => {
+    const dateStr = date.toISOString().split('T')[0];
     
     return allEvents.filter(event => {
-      if (!event.event_date || !event.event_time) return false;
-      
-      // Check if date matches
-      if (event.event_date !== dateStr) return false;
-      
-      // Check if event is starred by user
+      if (!event.event_date) return false;
       const isStarred = starredEvents.some(s => s.item_id === event.id);
-      if (!isStarred) return false;
-      
-      // Parse event time
-      const timeParts = event.event_time.match(/(\d+):(\d+)\s*(AM|PM)/i);
-      if (!timeParts) return false;
-      
-      let eventHour = parseInt(timeParts[1]);
-      const eventMinute = parseInt(timeParts[2]);
-      const period = timeParts[3].toUpperCase();
-      
-      // Convert to 24-hour format
-      if (period === 'PM' && eventHour !== 12) eventHour += 12;
-      if (period === 'AM' && eventHour === 12) eventHour = 0;
-      
-      return eventHour === hour;
+      return event.event_date === dateStr && isStarred;
     });
   };
 
-  const navigateWeek = (direction) => {
-    const newWeek = currentWeek.map(date => {
-      const newDate = new Date(date);
-      newDate.setDate(date.getDate() + (direction * 7));
-      return newDate;
-    });
-    setCurrentWeek(newWeek);
-  };
-
-  const goToToday = () => {
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const sunday = new Date(today);
-    sunday.setDate(today.getDate() - dayOfWeek);
+  const parseEventTime = (timeStr) => {
+    if (!timeStr) return null;
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!match) return null;
     
-    const week = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(sunday);
-      date.setDate(sunday.getDate() + i);
-      week.push(date);
-    }
-    setCurrentWeek(week);
+    let hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    const period = match[3].toUpperCase();
+    
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    
+    return hours + minutes / 60;
+  };
+
+  const formatEventTime = (timeStr) => {
+    if (!timeStr) return '';
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!match) return timeStr;
+    return `${match[1]}:${match[2]} ${match[3]}`;
   };
 
   const isToday = (date) => {
@@ -117,78 +85,96 @@ const Calendar = ({ currentUser, onClose }) => {
     return date.toDateString() === today.toDateString();
   };
 
+  const navigateWeek = (direction) => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(currentDate.getDate() + (direction * 7));
+    setCurrentDate(newDate);
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const weekDates = getWeekDates();
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+
   return (
-    <div className="calendar-container">
-      <div className="calendar-header">
-        <div>
-          <h2>📅 My Calendar</h2>
-          <p className="calendar-subtitle">Starred events appear here automatically</p>
+    <div className="google-calendar">
+      {/* Header */}
+      <div className="calendar-top-bar">
+        <div className="calendar-left-controls">
+          <button className="today-button" onClick={goToToday}>
+            Today
+          </button>
+          <div className="nav-arrows">
+            <button className="arrow-btn" onClick={() => navigateWeek(-1)}>‹</button>
+            <button className="arrow-btn" onClick={() => navigateWeek(1)}>›</button>
+          </div>
+          <h2 className="current-month">
+            {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </h2>
         </div>
-        <div className="calendar-nav">
-          <button onClick={() => navigateWeek(-1)} className="nav-btn">← Prev</button>
-          <button onClick={goToToday} className="today-btn">Today</button>
-          <button onClick={() => navigateWeek(1)} className="nav-btn">Next →</button>
-          <button onClick={onClose} className="close-btn">✕</button>
-        </div>
+        <button className="calendar-close-btn" onClick={onClose}>✕</button>
       </div>
 
-      {currentWeek.length > 0 && (
-        <div className="week-display">
-          Week of {currentWeek[0].toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+      {/* Week View */}
+      <div className="week-view-container">
+        {/* Days Header */}
+        <div className="days-header">
+          <div className="time-gutter"></div>
+          {weekDates.map((date, i) => (
+            <div key={i} className={`day-header ${isToday(date) ? 'today' : ''}`}>
+              <div className="day-name">{date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}</div>
+              <div className={`day-number ${isToday(date) ? 'today-number' : ''}`}>
+                {date.getDate()}
+              </div>
+            </div>
+          ))}
         </div>
-      )}
 
-      <div className="calendar-grid-container">
-        <table className="calendar-table">
-          <thead>
-            <tr>
-              <th className="time-column">Time</th>
-              {currentWeek.map((date, i) => (
-                <th key={i} className={isToday(date) ? 'today-column' : ''}>
-                  <div className="day-header">
-                    <div className="day-name">{DAYS[date.getDay()]}</div>
-                    <div className={`day-number ${isToday(date) ? 'today' : ''}`}>
-                      {date.getDate()}
-                    </div>
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {HOURS.map(hour => (
-              <tr key={hour} className="hour-row">
-                <td className="time-cell">
-                  {formatHour(hour)}
-                </td>
-                {currentWeek.map((date, dayIndex) => {
-                  const events = getEventsForDateTime(date, hour);
+        {/* Time Grid */}
+        <div className="time-grid-container">
+          <div className="time-grid">
+            {hours.map(hour => (
+              <div key={hour} className="hour-row">
+                <div className="time-label">
+                  {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
+                </div>
+                {weekDates.map((date, dayIndex) => {
+                  const dayEvents = getEventsForDate(date);
+                  const hourEvents = dayEvents.filter(event => {
+                    const eventHour = parseEventTime(event.event_time);
+                    return eventHour !== null && Math.floor(eventHour) === hour;
+                  });
+
                   return (
-                    <td key={dayIndex} className={`calendar-cell ${isToday(date) ? 'today-cell' : ''}`}>
-                      {events.map(event => (
-                        <div key={event.id} className="calendar-event">
-                          <div className="event-title">{event.title}</div>
-                          <div className="event-location">
-                            📍 {event.location?.name || 'TBA'}
-                          </div>
-                          <div className="event-time">{event.event_time}</div>
+                    <div key={dayIndex} className={`time-slot ${isToday(date) ? 'today-slot' : ''}`}>
+                      {hourEvents.map(event => (
+                        <div key={event.id} className="calendar-event-block">
+                          <div className="event-time-small">{formatEventTime(event.event_time)}</div>
+                          <div className="event-title-small">{event.title}</div>
+                          {event.location && (
+                            <div className="event-location-small">📍 {event.location.name}</div>
+                          )}
                         </div>
                       ))}
-                    </td>
+                    </div>
                   );
                 })}
-              </tr>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
-
-      {starredEvents.length === 0 && (
-        <div className="empty-calendar">
-          <p>⭐ Star some events to see them here!</p>
-          <p className="hint">Click the star icon on any event to add it to your calendar</p>
+          </div>
         </div>
-      )}
+
+        {/* Empty State */}
+        {starredEvents.length === 0 && (
+          <div className="calendar-empty-state">
+            <div className="empty-icon">📅</div>
+            <h3>No events yet</h3>
+            <p>Star some events to see them on your calendar</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
