@@ -671,7 +671,7 @@ const showPinForLocation = (poi) => {
     {isMobile ? (
       <MobileApp 
         currentUser={currentUser}
-        onLogout={handleLogout}
+        onLogout={onLogout}
         pois={pois}
         events={events}
         starredItems={starredItems}
