@@ -8,6 +8,8 @@ import 'leaflet-routing-machine';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 import Courses from './Courses.jsx';
 import CourseDetail from './CourseDetail.jsx';
+import MobileApp from './MobileApp.jsx';
+import { useState, useEffect } from 'react';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -41,7 +43,7 @@ const Home = ({ currentUser, onLogout }) => {
     location_id: '',
     description: ''
   });
-  
+  const [isMobile, setIsMobile] = useState(false);
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const activePinRef = useRef(null);
@@ -64,7 +66,6 @@ const Home = ({ currentUser, onLogout }) => {
     east: -117.7040,
     west: -117.7140
   };
-
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -80,6 +81,15 @@ const Home = ({ currentUser, onLogout }) => {
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // Get search results
@@ -657,311 +667,409 @@ const showPinForLocation = (poi) => {
   const hasResults = Object.values(searchResults).some(arr => arr.length > 0);
 
   return (
-    <div className="home-container">
-      <header className="header">
-        <div className="header-left">
-          <div className="chizu-header-logo">
-            <span className="logo-icon-small">🗾</span>
-            <h1>Chizu</h1>
+  <div className="home-container">
+    {isMobile ? (
+      <MobileApp 
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        pois={pois}
+        events={events}
+        starredItems={starredItems}
+        onStar={handleStar}
+        onPostEvent={handlePostEvent}
+        onViewOnMap={(location) => {
+          setSelectedLocation(location);
+          focusOnLocation(location);
+        }}
+      />
+    ) : (
+      <>
+        <header className="header">
+          <div className="header-left">
+            <div className="chizu-header-logo">
+              <span className="logo-icon-small">🗾</span>
+              <h1>Chizu</h1>
+            </div>
+            <span className="tagline">5C Campus Navigation</span>
           </div>
-          <span className="setShowSearchDropdowntagline">5C Campus Navigation</span>
-        </div>
-        <div className="header-right">
-          <div className="search-container">
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search locations..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              onFocus={() => searchTerm && setShowSearchDropdown(true)}
-              className="search-input"
-            />
-            {showSearchDropdown && searchTerm && (
-              <div ref={searchDropdownRef} className="search-dropdown">
-                {!hasResults ? (
-                  <div className="search-no-results">
-                    No locations found for "{searchTerm}"
+          <div className="header-right">
+            <div className="search-container">
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search locations..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                onFocus={() => searchTerm && setShowSearchDropdown(true)}
+                className="search-input"
+              />
+              {showSearchDropdown && searchTerm && (
+                <div ref={searchDropdownRef} className="search-dropdown">
+                  {!hasResults ? (
+                    <div className="search-no-results">
+                      No locations found for "{searchTerm}"
+                    </div>
+                  ) : (
+                    <>
+                      {searchResults.dining.length > 0 && (
+                        <div className="search-category">
+                          <div className="search-category-title">🍽️ Dining</div>
+                          {searchResults.dining.map(poi => (
+                            <div 
+                              key={poi.id}
+                              className="search-result-item"
+                              onClick={() => handleSearchResultClick(poi)}
+                            >
+                              <div className="search-result-name">
+                                {highlightMatch(poi.name, searchTerm)}
+                              </div>
+                              <div className="search-result-college">{poi.college}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {searchResults.academic.length > 0 && (
+                        <div className="search-category">
+                          <div className="search-category-title">📚 Academic</div>
+                          {searchResults.academic.map(poi => (
+                            <div 
+                              key={poi.id}
+                              className="search-result-item"
+                              onClick={() => handleSearchResultClick(poi)}
+                            >
+                              <div className="search-result-name">
+                                {highlightMatch(poi.name, searchTerm)}
+                              </div>
+                              <div className="search-result-college">{poi.college}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {searchResults.recreation.length > 0 && (
+                        <div className="search-category">
+                          <div className="search-category-title">🏋️ Recreation</div>
+                          {searchResults.recreation.map(poi => (
+                            <div 
+                              key={poi.id}
+                              className="search-result-item"
+                              onClick={() => handleSearchResultClick(poi)}
+                            >
+                              <div className="search-result-name">
+                                {highlightMatch(poi.name, searchTerm)}
+                              </div>
+                              <div className="search-result-college">{poi.college}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {searchResults.other.length > 0 && (
+                        <div className="search-category">
+                          <div className="search-category-title">📍 Other</div>
+                          {searchResults.other.map(poi => (
+                            <div 
+                              key={poi.id}
+                              className="search-result-item"
+                              onClick={() => handleSearchResultClick(poi)}
+                            >
+                              <div className="search-result-name">
+                                {highlightMatch(poi.name, searchTerm)}
+                              </div>
+                              <div className="search-result-college">{poi.college}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="user-info">
+              <span className="user-name">{currentUser.name}</span>
+              <span className={`user-badge ${currentUser.role}`}>{currentUser.role}</span>
+              <button onClick={onLogout} className="logout-btn">Logout</button>
+            </div>
+          </div>
+        </header>
+
+        {selectedLocation && !showLocationDetail && (
+          <div className="mini-location-card">
+            <div className="mini-card-content">
+              <div className="mini-card-info">
+                <div className="mini-card-name">{selectedLocation.name}</div>
+                <div className="mini-card-college">{selectedLocation.college}</div>
+              </div>
+              <button 
+                className="mini-card-directions"
+                onClick={() => getDirections(selectedLocation)}
+              >
+                🧭 Directions
+              </button>
+              <button 
+                className="mini-card-see-more"
+                onClick={() => setShowLocationDetail(true)}
+              >
+                See More →
+              </button>
+              <button 
+                className="mini-card-close"
+                onClick={() => {
+                  setSelectedLocation(null);
+                  clearDirections();
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
+        {routeInfo && (
+          <div className={`route-info-card ${routeCollapsed ? 'collapsed' : ''}`}>
+            <div className="route-header">
+              <h3>Directions to {routeInfo.destination}</h3>
+              <div className="route-header-actions">
+                <button 
+                  onClick={() => setRouteCollapsed(!routeCollapsed)} 
+                  className="collapse-route-btn"
+                >
+                  {routeCollapsed ? '▲' : '▼'}
+                </button>
+                <button onClick={clearDirections} className="close-route-btn">✕</button>
+              </div>
+            </div>
+            {!routeCollapsed && (
+              <div className="route-details">
+                <div className="route-distance">
+                  📏 {routeInfo.distance} miles ({routeInfo.distanceKm} km)
+                </div>
+                <div className="route-modes">
+                  <div className="route-mode">
+                    <span className="mode-icon">🚶</span>
+                    <span className="mode-time">{routeInfo.walkTime} min</span>
+                    <span className="mode-label">Walking</span>
                   </div>
-                ) : (
-                  <>
-                    {searchResults.dining.length > 0 && (
-                      <div className="search-category">
-                        <div className="search-category-title">🍽️ Dining</div>
-                        {searchResults.dining.map(poi => (
-                          <div 
-                            key={poi.id}
-                            className="search-result-item"
-                            onClick={() => handleSearchResultClick(poi)}
-                          >
-                            <div className="search-result-name">
-                              {highlightMatch(poi.name, searchTerm)}
-                            </div>
-                            <div className="search-result-college">{poi.college}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {searchResults.academic.length > 0 && (
-                      <div className="search-category">
-                        <div className="search-category-title">📚 Academic</div>
-                        {searchResults.academic.map(poi => (
-                          <div 
-                            key={poi.id}
-                            className="search-result-item"
-                            onClick={() => handleSearchResultClick(poi)}
-                          >
-                            <div className="search-result-name">
-                              {highlightMatch(poi.name, searchTerm)}
-                            </div>
-                            <div className="search-result-college">{poi.college}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {searchResults.recreation.length > 0 && (
-                      <div className="search-category">
-                        <div className="search-category-title">🏋️ Recreation</div>
-                        {searchResults.recreation.map(poi => (
-                          <div 
-                            key={poi.id}
-                            className="search-result-item"
-                            onClick={() => handleSearchResultClick(poi)}
-                          >
-                            <div className="search-result-name">
-                              {highlightMatch(poi.name, searchTerm)}
-                            </div>
-                            <div className="search-result-college">{poi.college}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {searchResults.other.length > 0 && (
-                      <div className="search-category">
-                        <div className="search-category-title">📍 Other</div>
-                        {searchResults.other.map(poi => (
-                          <div 
-                            key={poi.id}
-                            className="search-result-item"
-                            onClick={() => handleSearchResultClick(poi)}
-                          >
-                            <div className="search-result-name">
-                              {highlightMatch(poi.name, searchTerm)}
-                            </div>
-                            <div className="search-result-college">{poi.college}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
+                  <div className="route-mode">
+                    <span className="mode-icon">🚴</span>
+                    <span className="mode-time">{routeInfo.bikeTime} min</span>
+                    <span className="mode-label">Biking</span>
+                  </div>
+                  <div className="route-mode">
+                    <span className="mode-icon">🛴</span>
+                    <span className="mode-time">{routeInfo.scooterTime} min</span>
+                    <span className="mode-label">Scooter</span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
-          <div className="user-info">
-            <span className="user-name">{currentUser.name}</span>
-            <span className={`user-badge ${currentUser.role}`}>{currentUser.role}</span>
-            <button onClick={onLogout} className="logout-btn">Logout</button>
-          </div>
-        </div>
-      </header>
-      {selectedLocation && !showLocationDetail && (
-      <div className="mini-location-card">
-        <div className="mini-card-content">
-          <div className="mini-card-info">
-            <div className="mini-card-name">{selectedLocation.name}</div>
-            <div className="mini-card-college">{selectedLocation.college}</div>
-          </div>
-          <button 
-            className="mini-card-directions"
-            onClick={() => getDirections(selectedLocation)}
-          >
-            🧭 Directions
-          </button>
-          <button 
-            className="mini-card-see-more"
-            onClick={() => setShowLocationDetail(true)}
-          >
-            See More →
-          </button>
-          <button 
-            className="mini-card-close"
-            onClick={() => {
-              setSelectedLocation(null);
-              clearDirections();
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-    )}
-    {routeInfo && (
-    <div className={`route-info-card ${routeCollapsed ? 'collapsed' : ''}`}>
-      <div className="route-header">
-        <h3>Directions to {routeInfo.destination}</h3>
-        <div className="route-header-actions">
-          <button 
-            onClick={() => setRouteCollapsed(!routeCollapsed)} 
-            className="collapse-route-btn"
-          >
-            {routeCollapsed ? '▲' : '▼'}
-          </button>
-          <button onClick={clearDirections} className="close-route-btn">✕</button>
-        </div>
-      </div>
-      {!routeCollapsed && (
-        <div className="route-details">
-          <div className="route-distance">
-            📏 {routeInfo.distance} miles ({routeInfo.distanceKm} km)
-          </div>
-          <div className="route-modes">
-            <div className="route-mode">
-              <span className="mode-icon">🚶</span>
-              <span className="mode-time">{routeInfo.walkTime} min</span>
-              <span className="mode-label">Walking</span>
-            </div>
-            <div className="route-mode">
-              <span className="mode-icon">🚴</span>
-              <span className="mode-time">{routeInfo.bikeTime} min</span>
-              <span className="mode-label">Biking</span>
-            </div>
-            <div className="route-mode">
-              <span className="mode-icon">🛴</span>
-              <span className="mode-time">{routeInfo.scooterTime} min</span>
-              <span className="mode-label">Scooter</span>
+        )}
+
+        <div className="main-content">
+          <div className="map-section">
+            <div className="leaflet-map-container">
+              <div ref={mapRef} className="leaflet-map"></div>
+              {userLocation && (
+                <button className="locate-me-btn" onClick={centerOnUser}>
+                  📍 My Location
+                </button>
+              )}
             </div>
           </div>
-        </div>
-      )}
-    </div>
-  )}
-      <div className="main-content">
-        <div className="map-section">
-          <div className="leaflet-map-container">
-            <div ref={mapRef} className="leaflet-map"></div>
-            {userLocation && (
-              <button className="locate-me-btn" onClick={centerOnUser}>
-                📍 My Location
-              </button>
+          
+          <div className="sidebar">
+            <h3 className="sidebar-title">Categories</h3>
+            
+            {(currentUser.role === 'student' || currentUser.role === 'guest') && (
+              <div className="category-section">
+                <button 
+                  className="category-btn calendar-btn"
+                  onClick={() => setShowCalendar(true)}
+                >
+                  <span className="category-icon">📅</span>
+                  <span className="category-name">My Calendar</span>
+                  {starredItems.filter(s => s.item_type === 'event').length > 0 && (
+                    <span className="category-count star-badge">
+                      {starredItems.filter(s => s.item_type === 'event').length}
+                    </span>
+                  )}
+                </button>
+              </div>
             )}
-          </div>
-        </div>
-        
-        <div className="sidebar">
-          <h3 className="sidebar-title">Categories</h3>
-          
-          {(currentUser.role === 'student' || currentUser.role === 'guest') && (
-            <div className="category-section">
-              <button 
-                className="category-btn calendar-btn"
-                onClick={() => setShowCalendar(true)}
-              >
-                <span className="category-icon">📅</span>
-                <span className="category-name">My Calendar</span>
-                {starredItems.filter(s => s.item_type === 'event').length > 0 && (
-                  <span className="category-count star-badge">
-                    {starredItems.filter(s => s.item_type === 'event').length}
-                  </span>
+
+            {currentUser.role === 'admin' && pendingEvents.length > 0 && (
+              <div className="category-section">
+                <button 
+                  className="category-btn approval-btn"
+                  onClick={() => setExpandedCategory('event-approvals')}
+                >
+                  <span className="category-icon">✅</span>
+                  <span className="category-name">Event Approvals</span>
+                  <span className="category-count pending-badge">{pendingEvents.length}</span>
+                  <span className="expand-icon">{expandedCategory === 'event-approvals' ? '▼' : '▶'}</span>
+                </button>
+                
+                {expandedCategory === 'event-approvals' && (
+                  <div className="approval-list">
+                    {pendingEvents.map(event => (
+                      <div key={event.id} className="approval-item">
+                        <div className="approval-header">
+                          <strong>{event.title}</strong>
+                          <span className="pending-tag">PENDING</span>
+                        </div>
+                        <div className="approval-details">
+                          <div>{event.date_time}</div>
+                          {event.location && <div>📍 {event.location.name}</div>}
+                          <div className="approval-actions">
+                            <button 
+                              onClick={() => handleApproveEvent(event.id, true)}
+                              className="approve-btn"
+                            >
+                              ✓ Approve
+                            </button>
+                            <button 
+                              onClick={() => handleApproveEvent(event.id, false)}
+                              className="reject-btn"
+                            >
+                              ✕ Reject
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </button>
-            </div>
-          )}
+              </div>
+            )}
 
-          {currentUser.role === 'admin' && pendingEvents.length > 0 && (
-            <div className="category-section">
-              <button 
-                className="category-btn approval-btn"
-                onClick={() => setExpandedCategory('event-approvals')}
-              >
-                <span className="category-icon">✅</span>
-                <span className="category-name">Event Approvals</span>
-                <span className="category-count pending-badge">{pendingEvents.length}</span>
-                <span className="expand-icon">{expandedCategory === 'event-approvals' ? '▼' : '▶'}</span>
-              </button>
-              
-              {expandedCategory === 'event-approvals' && (
-                <div className="approval-list">
-                  {pendingEvents.map(event => (
-                    <div key={event.id} className="approval-item">
-                      <div className="approval-header">
-                        <strong>{event.title}</strong>
-                        <span className="pending-tag">PENDING</span>
-                      </div>
-                      <div className="approval-details">
-                        <div>{event.date_time}</div>
-                        {event.location && <div>📍 {event.location.name}</div>}
-                        <div className="approval-actions">
-                          <button 
-                            onClick={() => handleApproveEvent(event.id, true)}
-                            className="approve-btn"
-                          >
-                            ✓ Approve
-                          </button>
-                          <button 
-                            onClick={() => handleApproveEvent(event.id, false)}
-                            className="reject-btn"
-                          >
-                            ✕ Reject
-                          </button>
+            {currentUser.role === 'admin' && pendingPosts.length > 0 && (
+              <div className="category-section">
+                <button 
+                  className="category-btn approval-btn"
+                  onClick={() => setExpandedCategory('post-approvals')}
+                >
+                  <span className="category-icon">💬</span>
+                  <span className="category-name">Post Approvals</span>
+                  <span className="category-count pending-badge">{pendingPosts.length}</span>
+                  <span className="expand-icon">{expandedCategory === 'post-approvals' ? '▼' : '▶'}</span>
+                </button>
+                
+                {expandedCategory === 'post-approvals' && (
+                  <div className="approval-list">
+                    {pendingPosts.map(post => (
+                      <div key={post.id} className="approval-item">
+                        <div className="approval-header">
+                          <strong>Location Post</strong>
+                          <span className="pending-tag">PENDING</span>
+                        </div>
+                        <div className="approval-details">
+                          <div className="post-preview">{post.content}</div>
+                          <div className="approval-actions">
+                            <button 
+                              onClick={() => handleApprovePost(post.id, true)}
+                              className="approve-btn"
+                            >
+                              ✓ Approve
+                            </button>
+                            <button 
+                              onClick={() => handleApprovePost(post.id, false)}
+                              className="reject-btn"
+                            >
+                              ✕ Reject
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {currentUser.role === 'admin' && pendingPosts.length > 0 && (
-            <div className="category-section">
-              <button 
-                className="category-btn approval-btn"
-                onClick={() => setExpandedCategory('post-approvals')}
-              >
-                <span className="category-icon">💬</span>
-                <span className="category-name">Post Approvals</span>
-                <span className="category-count pending-badge">{pendingPosts.length}</span>
-                <span className="expand-icon">{expandedCategory === 'post-approvals' ? '▼' : '▶'}</span>
-              </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {categories.map(category => {
+              if (category.id === 'events') {
+                const isExpanded = expandedCategory === category.id;
+                
+                return (
+                  <div key={category.id} className="category-section">
+                    <button 
+                      className="category-btn"
+                      onClick={() => toggleCategory(category.id)}
+                    >
+                      <span className="category-icon">{category.icon}</span>
+                      <span className="category-name">{category.name}</span>
+                      <span className="category-count">({events.length})</span>
+                      <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
+                    </button>
+                    
+                    {isExpanded && (
+                      <div className="event-types-container">
+                        {eventTypes.map(eventType => {
+                          const eventsList = getEventsByType(eventType.id);
+                          const isEventTypeExpanded = expandedEventType === eventType.id;
+                          
+                          return (
+                            <div key={eventType.id} className="event-type-section">
+                              <button 
+                                className="event-type-btn"
+                                onClick={() => toggleEventType(eventType.id)}
+                              >
+                                <span className="category-icon">{eventType.icon}</span>
+                                <span className="category-name">{eventType.name}</span>
+                                <span className="category-count">({eventsList.length})</span>
+                                <span className="expand-icon">{isEventTypeExpanded ? '▼' : '▶'}</span>
+                              </button>
+                              
+                              {isEventTypeExpanded && (
+                                <div className="location-list">
+                                  {eventsList.length === 0 ? (
+                                    <div className="no-locations">No events yet</div>
+                                  ) : (
+                                    eventsList.map(event => (
+                                      <div 
+                                        key={event.id} 
+                                        className="event-item"
+                                        onClick={() => focusOnEvent(event)}
+                                      >
+                                        <div className="event-header-row">
+                                          <div className="event-title">{event.title}</div>
+                                          {currentUser.role !== 'guest' && (
+                                            <button
+                                              className={`star-btn ${isStarred('event', event.id) ? 'starred' : ''}`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleStar('event', event.id);
+                                              }}
+                                            >
+                                              {isStarred('event', event.id) ? '⭐' : '☆'}
+                                            </button>
+                                          )}
+                                        </div>
+                                        <div className="event-time">{event.date_time}</div>
+                                        {event.location && (
+                                          <div className="event-location">{event.location.name}</div>
+                                        )}
+                                        {event.description && (
+                                          <div className="event-description">{event.description}</div>
+                                        )}
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
               
-              {expandedCategory === 'post-approvals' && (
-                <div className="approval-list">
-                  {pendingPosts.map(post => (
-                    <div key={post.id} className="approval-item">
-                      <div className="approval-header">
-                        <strong>Location Post</strong>
-                        <span className="pending-tag">PENDING</span>
-                      </div>
-                      <div className="approval-details">
-                        <div className="post-preview">{post.content}</div>
-                        <div className="approval-actions">
-                          <button 
-                            onClick={() => handleApprovePost(post.id, true)}
-                            className="approve-btn"
-                          >
-                            ✓ Approve
-                          </button>
-                          <button 
-                            onClick={() => handleApprovePost(post.id, false)}
-                            className="reject-btn"
-                          >
-                            ✕ Reject
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          
-          {categories.map(category => {
-            if (category.id === 'events') {
+              const locations = getLocationsByCategory(category.id);
               const isExpanded = expandedCategory === category.id;
               
               return (
@@ -972,319 +1080,244 @@ const showPinForLocation = (poi) => {
                   >
                     <span className="category-icon">{category.icon}</span>
                     <span className="category-name">{category.name}</span>
-                    <span className="category-count">({events.length})</span>
+                    <span className="category-count">({locations.length})</span>
                     <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
                   </button>
                   
                   {isExpanded && (
-                    <div className="event-types-container">
-                      {eventTypes.map(eventType => {
-                        const eventsList = getEventsByType(eventType.id);
-                        const isEventTypeExpanded = expandedEventType === eventType.id;
-                        
-                        return (
-                          <div key={eventType.id} className="event-type-section">
-                            <button 
-                              className="event-type-btn"
-                              onClick={() => toggleEventType(eventType.id)}
+                    <div className="location-list">
+                      {locations.length === 0 ? (
+                        <div className="no-locations">No locations found</div>
+                      ) : (
+                        locations.map(poi => (
+                          <div key={poi.id} className="location-item-container">
+                            <div 
+                              className="location-item"
+                              onClick={() => focusOnLocation(poi)}
                             >
-                              <span className="category-icon">{eventType.icon}</span>
-                              <span className="category-name">{eventType.name}</span>
-                              <span className="category-count">({eventsList.length})</span>
-                              <span className="expand-icon">{isEventTypeExpanded ? '▼' : '▶'}</span>
-                            </button>
-                            
-                            {isEventTypeExpanded && (
-                              <div className="location-list">
-                                {eventsList.length === 0 ? (
-                                  <div className="no-locations">No events yet</div>
-                                ) : (
-                                  eventsList.map(event => (
-                                    <div 
-                                      key={event.id} 
-                                      className="event-item"
-                                      onClick={() => focusOnEvent(event)}
-                                    >
-                                      <div className="event-header-row">
-                                        <div className="event-title">{event.title}</div>
-                                        {currentUser.role !== 'guest' && (
-                                          <button
-                                            className={`star-btn ${isStarred('event', event.id) ? 'starred' : ''}`}
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleStar('event', event.id);
-                                            }}
-                                          >
-                                            {isStarred('event', event.id) ? '⭐' : '☆'}
-                                          </button>
-                                        )}
-                                      </div>
-                                      <div className="event-time">{event.date_time}</div>
-                                      {event.location && (
-                                        <div className="event-location">{event.location.name}</div>
-                                      )}
-                                      {event.description && (
-                                        <div className="event-description">{event.description}</div>
-                                      )}
-                                    </div>
-                                  ))
+                              <div className="location-header-row">
+                                <div>
+                                  <div className="location-name">{poi.name}</div>
+                                  <div className="location-college">{poi.college}</div>
+                                </div>
+                                {currentUser.role !== 'guest' && (
+                                  <button
+                                    className={`star-btn ${isStarred('location', poi.id) ? 'starred' : ''}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStar('location', poi.id);
+                                    }}
+                                  >
+                                    {isStarred('location', poi.id) ? '⭐' : '☆'}
+                                  </button>
                                 )}
                               </div>
-                            )}
+                            </div>
+                            <button 
+                              className="see-more-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedLocation(poi);
+                              }}
+                            >
+                              See More →
+                            </button>
                           </div>
-                        );
-                      })}
+                        ))
+                      )}
                     </div>
                   )}
                 </div>
               );
-            }
-            
-            const locations = getLocationsByCategory(category.id);
-            const isExpanded = expandedCategory === category.id;
-            
-            return (
-              <div key={category.id} className="category-section">
-                <button 
-                  className="category-btn"
-                  onClick={() => toggleCategory(category.id)}
-                >
-                  <span className="category-icon">{category.icon}</span>
-                  <span className="category-name">{category.name}</span>
-                  <span className="category-count">({locations.length})</span>
-                  <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
-                </button>
-                
-                {isExpanded && (
-                  <div className="location-list">
-                    {locations.length === 0 ? (
-                      <div className="no-locations">No locations found</div>
-                    ) : (
-                      locations.map(poi => (
-                        <div key={poi.id} className="location-item-container">
-                          <div 
-                            className="location-item"
-                            onClick={() => focusOnLocation(poi)}
-                          >
-                            <div className="location-header-row">
-                              <div>
-                                <div className="location-name">{poi.name}</div>
-                                <div className="location-college">{poi.college}</div>
-                              </div>
-                              {currentUser.role !== 'guest' && (
-                                <button
-                                  className={`star-btn ${isStarred('location', poi.id) ? 'starred' : ''}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleStar('location', poi.id);
-                                  }}
-                                >
-                                  {isStarred('location', poi.id) ? '⭐' : '☆'}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          <button 
-                            className="see-more-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedLocation(poi);
-                            }}
-                          >
-                            See More →
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+            })}
+          </div>
         </div>
-      </div>
 
-      {showEventForm && (
-        <div className="modal-overlay" onClick={() => setShowEventForm(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>Post New Event</h2>
-            {currentUser.role === 'student' && (
-              <p className="info-message">Your event will be submitted for admin approval</p>
-            )}
-            <form onSubmit={submitEvent}>
-              <div className="form-group">
-                <label>Event Title</label>
-                <input
-                  type="text"
-                  required
-                  value={eventFormData.title}
-                  onChange={(e) => setEventFormData({...eventFormData, title: e.target.value})}
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Event Type</label>
-                <select
-                  value={eventFormData.event_type}
-                  onChange={(e) => setEventFormData({...eventFormData, event_type: e.target.value})}
-                >
-                  <option value="career">Career</option>
-                  <option value="clubs">Clubs</option>
-                  <option value="fun">Fun</option>
-                </select>
-              </div>
-              
-              <div className="form-group">
-                <label>Event Date</label>
-                <input
-                  type="date"
-                  required
-                  value={eventFormData.event_date}
-                  onChange={(e) => setEventFormData({...eventFormData, event_date: e.target.value})}
-                  min={new Date().toISOString().split('T')[0]}
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Event Time</label>
-                <div className="time-input-group">
+        {showEventForm && (
+          <div className="modal-overlay" onClick={() => setShowEventForm(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <h2>Post New Event</h2>
+              {currentUser.role === 'student' && (
+                <p className="info-message">Your event will be submitted for admin approval</p>
+              )}
+              <form onSubmit={submitEvent}>
+                <div className="form-group">
+                  <label>Event Title</label>
                   <input
-                    type="time"
+                    type="text"
                     required
-                    value={eventFormData.event_time}
-                    onChange={(e) => setEventFormData({...eventFormData, event_time: e.target.value})}
-                    className="time-input"
+                    value={eventFormData.title}
+                    onChange={(e) => setEventFormData({...eventFormData, title: e.target.value})}
                   />
+                </div>
+                
+                <div className="form-group">
+                  <label>Event Type</label>
                   <select
-                    value={eventFormData.time_period}
-                    onChange={(e) => setEventFormData({...eventFormData, time_period: e.target.value})}
-                    className="period-select"
+                    value={eventFormData.event_type}
+                    onChange={(e) => setEventFormData({...eventFormData, event_type: e.target.value})}
                   >
-                    <option value="AM">AM</option>
-                    <option value="PM">PM</option>
+                    <option value="career">Career</option>
+                    <option value="clubs">Clubs</option>
+                    <option value="fun">Fun</option>
                   </select>
                 </div>
-              </div>
-              
-              <div className="form-group">
-                <label>Location</label>
-                <select
-                  required
-                  value={eventFormData.location_id}
-                  onChange={(e) => setEventFormData({...eventFormData, location_id: e.target.value})}
-                >
-                  <option value="">Select a location</option>
-                  {pois.map(poi => (
-                    <option key={poi.id} value={poi.id}>{poi.name}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="form-group">
-                <label>Description</label>
-                <textarea
-                  value={eventFormData.description}
-                  onChange={(e) => setEventFormData({...eventFormData, description: e.target.value})}
-                  rows="3"
-                />
-              </div>
-              
-              <div className="form-actions">
-                <button type="button" onClick={() => setShowEventForm(false)} className="btn-cancel">
-                  Cancel
-                </button>
-                <button type="submit" className="btn-submit">
-                  {currentUser.role === 'admin' ? 'Post Event' : 'Submit for Approval'}
-                </button>
-              </div>
-            </form>
+                
+                <div className="form-group">
+                  <label>Event Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={eventFormData.event_date}
+                    onChange={(e) => setEventFormData({...eventFormData, event_date: e.target.value})}
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Event Time</label>
+                  <div className="time-input-group">
+                    <input
+                      type="time"
+                      required
+                      value={eventFormData.event_time}
+                      onChange={(e) => setEventFormData({...eventFormData, event_time: e.target.value})}
+                      className="time-input"
+                    />
+                    <select
+                      value={eventFormData.time_period}
+                      onChange={(e) => setEventFormData({...eventFormData, time_period: e.target.value})}
+                      className="period-select"
+                    >
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="form-group">
+                  <label>Location</label>
+                  <select
+                    required
+                    value={eventFormData.location_id}
+                    onChange={(e) => setEventFormData({...eventFormData, location_id: e.target.value})}
+                  >
+                    <option value="">Select a location</option>
+                    {pois.map(poi => (
+                      <option key={poi.id} value={poi.id}>{poi.name}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea
+                    value={eventFormData.description}
+                    onChange={(e) => setEventFormData({...eventFormData, description: e.target.value})}
+                    rows="3"
+                  />
+                </div>
+                
+                <div className="form-actions">
+                  <button type="button" onClick={() => setShowEventForm(false)} className="btn-cancel">
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-submit">
+                    {currentUser.role === 'admin' ? 'Post Event' : 'Submit for Approval'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {showCalendar && (
-        <div className="modal-overlay" onClick={() => setShowCalendar(false)}>
-          <div className="modal-content calendar-modal" onClick={(e) => e.stopPropagation()}>
-            <Calendar currentUser={currentUser} onClose={() => setShowCalendar(false)} />
+        {showCalendar && (
+          <div className="modal-overlay" onClick={() => setShowCalendar(false)}>
+            <div className="modal-content calendar-modal" onClick={(e) => e.stopPropagation()}>
+              <Calendar currentUser={currentUser} onClose={() => setShowCalendar(false)} />
+            </div>
           </div>
-        </div>
-      )}
-      {showCourses && (
-        <div className="modal-overlay" onClick={() => setShowCourses(false)}>
-          <div className="modal-content courses-modal" onClick={(e) => e.stopPropagation()}>
-            <Courses 
-              currentUser={currentUser}
-              onClose={() => setShowCourses(false)}
-              onViewOnMap={(location) => {
-                setSelectedLocation(location);
-                focusOnLocation(location);
-                setShowCourses(false);
-              }}
-              onViewCourseDetail={(course) => {
-                setSelectedCourse(course);
-                setShowCourseDetail(true);
-              }}
-            />
-          </div>
-        </div>
-      )}
-      {showCourseDetail && selectedCourse && (
-        <div className="modal-overlay" onClick={() => setShowCourseDetail(false)}>
-          <div className="modal-content course-detail-modal" onClick={(e) => e.stopPropagation()}>
-            <CourseDetail 
-              course={selectedCourse}
-              currentUser={currentUser}
-              onClose={() => setShowCourseDetail(false)}
-            />
-          </div>
-        </div>
-      )}
+        )}
 
-      {showLocationDetail && selectedLocation && (
-        <div className="modal-overlay" onClick={() => setShowLocationDetail(false)}>
-          <div className="modal-content location-detail-modal" onClick={(e) => e.stopPropagation()}>
-            <LocationDetail 
-              location={selectedLocation} 
-              currentUser={currentUser}
-              onClose={() => {
-                setShowLocationDetail(false);
-                setSelectedLocation(null);
-              }}
-            />
+        {showCourses && (
+          <div className="modal-overlay" onClick={() => setShowCourses(false)}>
+            <div className="modal-content courses-modal" onClick={(e) => e.stopPropagation()}>
+              <Courses 
+                currentUser={currentUser}
+                onClose={() => setShowCourses(false)}
+                onViewOnMap={(location) => {
+                  setSelectedLocation(location);
+                  focusOnLocation(location);
+                  setShowCourses(false);
+                }}
+                onViewCourseDetail={(course) => {
+                  setSelectedCourse(course);
+                  setShowCourseDetail(true);
+                }}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="quick-actions">
-        <button className="action-btn events" onClick={handlePostEvent}>
-          📅 Post Event
-        </button>
-        <button className="action-btn classes" onClick={() => setShowCourses(true)}>
-          📚 Find Classes
-        </button>
-        <button className="action-btn dining" onClick={() => window.open('https://menu.jojodmo.com/', '_blank')}>
-          🍽️ Dining Menus
-        </button>
-      </div>
+        {showCourseDetail && selectedCourse && (
+          <div className="modal-overlay" onClick={() => setShowCourseDetail(false)}>
+            <div className="modal-content course-detail-modal" onClick={(e) => e.stopPropagation()}>
+              <CourseDetail 
+                course={selectedCourse}
+                currentUser={currentUser}
+                onClose={() => setShowCourseDetail(false)}
+              />
+            </div>
+          </div>
+        )}
 
-      <footer className="footer">
-        <div className="footer-content">
-          <div className="stats">
-            <span>Total Locations: {pois.length}</span>
-            <span>Total Events: {events.length}</span>
-            {currentUser.role === 'admin' && (pendingEvents.length > 0 || pendingPosts.length > 0) && (
-              <span className="pending-stat">
-                Pending Approvals: {pendingEvents.length + pendingPosts.length}
-              </span>
-            )}
+        {showLocationDetail && selectedLocation && (
+          <div className="modal-overlay" onClick={() => setShowLocationDetail(false)}>
+            <div className="modal-content location-detail-modal" onClick={(e) => e.stopPropagation()}>
+              <LocationDetail 
+                location={selectedLocation} 
+                currentUser={currentUser}
+                onClose={() => {
+                  setShowLocationDetail(false);
+                  setSelectedLocation(null);
+                }}
+              />
+            </div>
           </div>
-          <div className="backend-info">
-            <p>Powered by Chizu 🗾</p>
-          </div>
+        )}
+
+        <div className="quick-actions">
+          <button className="action-btn events" onClick={handlePostEvent}>
+            📅 Post Event
+          </button>
+          <button className="action-btn classes" onClick={() => setShowCourses(true)}>
+            📚 Find Classes
+          </button>
+          <button className="action-btn dining" onClick={() => window.open('https://menu.jojodmo.com/', '_blank')}>
+            🍽️ Dining Menus
+          </button>
         </div>
-      </footer>
-    </div>
-  );
-};
+
+        <footer className="footer">
+          <div className="footer-content">
+            <div className="stats">
+              <span>Total Locations: {pois.length}</span>
+              <span>Total Events: {events.length}</span>
+              {currentUser.role === 'admin' && (pendingEvents.length > 0 || pendingPosts.length > 0) && (
+                <span className="pending-stat">
+                  Pending Approvals: {pendingEvents.length + pendingPosts.length}
+                </span>
+              )}
+            </div>
+            <div className="backend-info">
+              <p>Powered by Chizu 🗾</p>
+            </div>
+          </div>
+        </footer>
+      </>
+    )}
+  </div>
+);
+}
 
 export default Home;
