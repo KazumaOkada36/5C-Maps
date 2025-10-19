@@ -48,6 +48,7 @@ const Home = ({ currentUser, onLogout }) => {
   const activePinRef = useRef(null);
   const userMarkerRef = useRef(null);
   const searchDropdownRef = useRef(null);
+  const markersRef = useRef([]);
   const searchInputRef = useRef(null);
   const [showLocationDetail, setShowLocationDetail] = useState(false); // Add this new state
   const [routingControl, setRoutingControl] = useState(null);
